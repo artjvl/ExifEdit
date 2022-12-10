@@ -32,7 +32,8 @@ class FileTree(QTreeWidget):
 
     def on_selection(self):
         item: QTreeWidgetItem = self.currentItem()
-        item.setExpanded(True)
+        if not item.isExpanded():
+            item.setExpanded(True)
 
         path: str = self.get_path(item)
         print(path)
@@ -56,3 +57,6 @@ class FileTree(QTreeWidget):
         if parent is not None:
             depth = self.get_depth(parent) + 1
         return depth
+
+    def get_current_path(self) -> str:
+        return self.get_path(self.currentItem())
