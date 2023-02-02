@@ -21,7 +21,7 @@ class FileTree(QTreeWidget):
                 self.load_subtree(item)
 
     def load_subtree(self, item: QTreeWidgetItem) -> None:
-        path: str = self.get_path(item)
+        path: str = self.item_path(item)
         try:
             for dir in os.listdir(f"{path}/"):
                 subpath: str = f"{path}/{dir}"
@@ -35,7 +35,7 @@ class FileTree(QTreeWidget):
         if not item.isExpanded():
             item.setExpanded(True)
 
-        path: str = self.get_path(item)
+        path: str = self.item_path(item)
         print(path)
 
     def on_expand(self, item: QTreeWidgetItem) -> None:
@@ -43,20 +43,20 @@ class FileTree(QTreeWidget):
             child: QTreeWidgetItem = item.child(i)
             self.load_subtree(child)
 
-    def get_path(self, item: QTreeWidgetItem) -> str:
+    def item_path(self, item: QTreeWidgetItem) -> str:
         text: str = item.text(0)
         parent: Optional[QTreeWidgetItem] = item.parent()
         if parent is not None:
-            super_text: str = self.get_path(parent)
+            super_text: str = self.item_path(parent)
             text = "{}/{}".format(super_text, text)
         return text
 
-    def get_depth(self, item: QTreeWidgetItem) -> int:
+    def depth(self, item: QTreeWidgetItem) -> int:
         depth: int = 0
         parent: Optional[QTreeWidgetItem] = item.parent()
         if parent is not None:
-            depth = self.get_depth(parent) + 1
+            depth = self.depth(parent) + 1
         return depth
 
-    def get_current_path(self) -> str:
-        return self.get_path(self.currentItem())
+    def selected_path(self) -> str:
+        return self.item_path(self.currentItem())

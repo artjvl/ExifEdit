@@ -1,14 +1,14 @@
 import sys
 from PySide6.QtWidgets import QWidget, QApplication
 
-from package.FileExplorer import FileExplorer
+from package.ExifEdit import ExifEdit
 from package.MainWindow import MainWindow
 
 
 def run():
     app = QApplication(sys.argv)
-    widget = FileExplorer()
+    widget = ExifEdit()
     window = MainWindow(widget)
-    window.resize(800, 600)
+    window.resize(800, 800)
     window.show()
     app.exec()
