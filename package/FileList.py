@@ -171,8 +171,6 @@ class FileList(QWidget):
         self.update_info()
 
     def selected_paths(self) -> List[str]:
-        paths: List[str] = []
-        for i, path in enumerate(self._path_list):
-            if self._selected_list[i]:
-                paths.append(path)
-        return paths
+        return [
+            path for i, path in enumerate(self._path_list) if self._selected_list[i]
+        ]

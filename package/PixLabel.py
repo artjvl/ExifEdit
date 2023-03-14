@@ -87,6 +87,27 @@ class SquarePixLabel(QtWidgets.QLabel):
         self.signal_done.emit()
 
 
+class AspectPixLabel(SquarePixLabel):
+    _default_aspect_ratio: float
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self._default_aspect_ratio = 1
+        self.setScaledContents(True)
+
+    def aspect_ratio(self) -> float:
+        if self.has_pixmap():
+            pixmap: QtGui.QPixmap = self.pixmap()
+            return pixmap.width() / pixmap.height()
+        return self._default_aspect_ratio
+
+    def heightForWidth(self, width: int) -> int:
+        return width / self.aspect_ratio()
+
+    def image_loader(self) -> Type[ImageLoader]:
+        return ImageLoader
+
+
 class ImageLoader(QtCore.QObject):
     # ref: https://realpython.com/python-pyqt-qthread/
 
@@ -120,57 +141,29 @@ class ImageLoader(QtCore.QObject):
 
     def read_image(self, reader: QtGui.QImageReader) -> QtGui.QImage:
         img_size: QtCore.QSize = reader.size()
-        label_width: int = self._size.width()
-        reduction_factor: float = label_width / max(img_size.width(), img_size.height())
-        qimg_size: QtCore.QSize = QtCore.QSize(
-            round(reduction_factor * img_size.width()),
-            round(reduction_factor * img_size.height()),
-        )
-        reader.setScaledSize(qimg_size)
-        qimg: QtGui.QImage = reader.read()
-        return qimg
-
-
-class AspectPixLabel(SquarePixLabel):
-    _default_aspect_ratio: float
-
-    def __init__(self, parent=None):
-        super().__init__(parent=parent)
-        self._default_aspect_ratio = 1
-        self.setScaledContents(True)
-
-    def aspect_ratio(self) -> float:
-        if self.has_pixmap():
-            pixmap: QtGui.QPixmap = self.pixmap()
-            return pixmap.width() / pixmap.height()
-        return self._default_aspect_ratio
-
-    def heightForWidth(self, width: int) -> int:
-        return width / self.aspect_ratio()
-
-    def image_loader(self) -> Type[ImageLoader]:
-        return AspectImageLoader
-
-
-class AspectImageLoader(ImageLoader):
-    def read_image(self, reader: QtGui.QImageReader) -> QtGui.QImage:
-        img_size: QtCore.QSize = reader.size()
-        aspect_ratio: float = img_size.width() / img_size.height()
-
-        # apply exif transformation to image
         transformation: QtGui.QImageIOHandler.Transformation = reader.transformation()
         is_rotated: bool = transformation in (
             QtGui.QImageIOHandler.Transformation.TransformationRotate90,
             QtGui.QImageIOHandler.Transformation.TransformationRotate270,
         )
 
-        # read image based on QLabel size with correct aspect ratio
-        label_width: int = self._size.width()
-        qimg_size: QtCore.QSize
+        reduction_factor: float
         if not is_rotated:
-            qimg_size = QtCore.QSize(label_width, label_width / aspect_ratio)
+            reduction_factor = min(
+                self._size.width() / img_size.width(),
+                self._size.height() / img_size.height(),
+            )
         else:
-            qimg_size = QtCore.QSize(label_width * aspect_ratio, label_width)
+            reduction_factor = min(
+                self._size.width() / img_size.height(),
+                self._size.height() / img_size.width(),
+            )
+
+        # reduction_factor: float = label_width / max(img_size.width(), img_size.height())
+        qimg_size: QtCore.QSize = QtCore.QSize(
+            round(reduction_factor * img_size.width()),
+            round(reduction_factor * img_size.height()),
+        )
         reader.setScaledSize(qimg_size)
         qimg: QtGui.QImage = reader.read()
         return qimg

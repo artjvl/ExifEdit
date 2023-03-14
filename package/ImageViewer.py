@@ -1,16 +1,21 @@
 import os
 import time
+import datetime
 from typing import Optional, Dict, List
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from PIL import Image, ExifTags, ImageQt
 
 from package.PixLabel import SquarePixLabel, AspectPixLabel
+from package.ExifFile import ExifFile, ExifField
 
 
 class ImageViewer(QtWidgets.QWidget):
+
     _paths: List[str]
     _index: int
+
+    signal_image_changed = QtCore.Signal(ExifFile)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent=parent)
@@ -60,9 +65,11 @@ class ImageViewer(QtWidgets.QWidget):
 
         layout.addWidget(self._exif_tree)
         self.setLayout(layout)
+        # self.resize(self.sizeHint().width(), self.minimumHeight())
 
     def create_tree(self) -> QtWidgets.QTreeWidget:
-        tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget(parent=self)
+        tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget()
+        tree.setHeaderHidden(True)
         tree.setStyleSheet(
             "background-color: rgba(0, 0, 0, 0%); font-size: 8pt; border-style: none;"
         )
@@ -71,42 +78,28 @@ class ImageViewer(QtWidgets.QWidget):
         tree.setIndentation(0)
         tree.setColumnCount(2)
         tree.setColumnWidth(0, 90)
-        tree.setHeaderHidden(True)
+        tree.setFixedHeight(160)
         return tree
 
-    def fill_tree(self, path: Optional[str] = None) -> None:
-        fields: List[str] = [
-            "File name",
-            "File size",
-            "Date taken",
-            "Camera maker",
-            "Camera model",
-            "F-stop",
-            "Exposure time",
-            "ISO speed",
-            "Focal length",
+    def fill_tree(self, file: Optional[ExifFile] = None) -> None:
+        if file is None:
+            file = ExifFile()  # empty ExifFile to get the field names
+
+        fields: List[ExifField] = [
+            file.filename(),
+            file.filesize_mb(),
+            file.date_taken(),
+            file.camera_maker(),
+            file.camera_model(),
+            file.fstop(),
+            file.exp_time(),
+            file.iso(),
+            file.focal_length(),
         ]
-        values: List[str] = [""] * len(fields)
-        if path is not None:
-            img: Image = Image.open(path)
-            img_exif: Optional[Image.Exif] = img._getexif()
-
-            values[0] = path.split("/")[-1]  # File name
-            values[1] = f"{os.path.getsize(path)/(1<<20):,.2f} MB"
-
-            if img_exif is not None:
-                values[2] = f"{img_exif.get(0x9003)}"  # Date taken
-                values[3] = f"{img_exif.get(0x010F)}"  # Camera maker
-                values[4] = f"{img_exif.get(0x0110)}"  # Camera model
-                values[5] = f"f/{img_exif.get(0x829D)}"  # F-stop
-                values[6] = f"1/{round(1 / img_exif.get(0x829A))}"  # Exposure time
-                values[7] = f"{img_exif.get(0x8827)}"  # ISO speed
-                values[8] = f"{img_exif.get(0x920A)} mm"  # focal length
-        assert len(fields) == len(values)
 
         self._exif_tree.clear()
-        for i, field in enumerate(fields):
-            QtWidgets.QTreeWidgetItem(self._exif_tree, [f"{field}:", values[i]])
+        for field in fields:
+            QtWidgets.QTreeWidgetItem(self._exif_tree, [field.title(), field.print()])
 
     def load_images(self, paths: List[str]) -> None:
         if paths != self._paths:
@@ -155,7 +148,11 @@ class ImageViewer(QtWidgets.QWidget):
         #         f"Reload ({self._index + 1}/{len(self._paths)})"
         #     )
 
-        self.fill_tree(path)
+        file: Optional[ExifFile] = None
+        if path is not None:
+            file = ExifFile(path)
+        self.fill_tree(file)
 
         self.set_buttons(False)
         self._pixlabel.load_image(path)
+        self.signal_image_changed.emit(file)
