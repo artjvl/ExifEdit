@@ -24,47 +24,6 @@ class FileEdit(QtWidgets.QWidget):
         layout.setAlignment(QtCore.Qt.AlignTop)
         self.setLayout(layout)
 
-        # menu = QtWidgets.QMenu()
-        # menu.setStyleSheet(
-        #     "QMenu::item {"
-        #     "padding: 2px 5px 2px 2px;"
-        #     "}"
-        #     "QMenu::item:selected {"
-        #     "background-color: rgb(0, 85, 127);"
-        #     "color: rgb(255, 255, 255);"
-        #     "}"
-        # )
-        # menu.addAction("Action 1")
-        # menu.addAction("Action 2")
-        # menu.addAction("Action 3")
-        # menu.aboutToShow.connect(lambda: print("menu"))
-        # # menu.show()
-
-        # # Set the icon of each QAction in the menu to the transparent icon
-        # for action in menu.actions():
-        #     pass
-        #     # action.setIconVisibleInMenu(False)
-
-        # # Create a widget action and set its default widget to the menu
-        # # widget_action = QtWidgets.QWidgetAction(None)
-        # # widget_action.setDefaultWidget(menu)
-
-        # # Create a button and add the widget action to it
-        # button = QtWidgets.QPushButton("Menu")
-        # button.setStyleSheet("text-align:left")
-        # button.setMenu(menu)
-        # print(button.menu())
-        # button.clicked.connect(lambda: print("pushed"))
-
-        # # Create a layout and add the button to it
-        # button_layout = QtWidgets.QVBoxLayout()
-        # button_layout.addWidget(button)
-
-        # # Create a widget and set the layout
-        # widget = QtWidgets.QWidget()
-        # widget.setLayout(button_layout)
-        # layout.addWidget(widget)
-
         self._change_filename = ChangeFileName()
         self._change_filename.signal_changed.connect(self.on_filename_changed)
         layout.addWidget(self._change_filename)
