@@ -42,5 +42,5 @@ class ExifEdit(QtWidgets.QWidget):
         paths: List[str] = self._file_list.selected_paths()
         self._image_viewer.load_images(paths)
 
-    def on_image(self, file: ExifFile) -> None:
+    def on_image(self, file: Optional[ExifFile]) -> None:
         self._file_edit.set_file(file)

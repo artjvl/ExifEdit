@@ -1,12 +1,8 @@
-import os
-import time
-import datetime
-from typing import Optional, Dict, List
+from typing import Optional, List
 
-from PySide6 import QtCore, QtGui, QtWidgets
-from PIL import Image, ExifTags, ImageQt
+from PySide6 import QtCore, QtWidgets
 
-from package.PixLabel import SquarePixLabel, AspectPixLabel
+from package.PixLabel import SquarePixLabel
 from package.ExifFile import ExifFile, ExifField
 
 

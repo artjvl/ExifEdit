@@ -58,6 +58,9 @@ class NestedListItem(QtWidgets.QWidget):
         if widget is not None:
             self._widget_layout.addWidget(widget)
 
+        if parent is not None:
+            self.parent.enabledChanged.connect(self.on_enabled)
+
         self._update(is_emit=False)
 
     # protected
@@ -76,7 +79,11 @@ class NestedListItem(QtWidgets.QWidget):
         is_checked: bool = self.is_checked()
 
         # enable
-        self._widget_container.setEnabled(is_checked)
+        # self._widget_container.setEnabled(is_checked)
+        if self.has_widget():
+            self._widget.setEnabled(is_checked)
+        for child in self._children:
+            child.setEnabled(is_checked)
 
         # signals
         self.signal_checked.emit(is_checked)
@@ -86,6 +93,9 @@ class NestedListItem(QtWidgets.QWidget):
     # public
     def text(self) -> str:
         return self._text
+
+    def has_widget(self) -> bool:
+        return self._widget is not None
 
     def widget(self) -> Optional[QtWidgets.QWidget]:
         return self._widget
@@ -98,6 +108,7 @@ class NestedListItem(QtWidgets.QWidget):
     ) -> NestedListItem:
         index: int = len(self._children)
         new = self.__class__(text, widget=widget, is_exclusive=is_exclusive)
+        new.setEnabled(self.is_checked())
         new._signal_checked.connect(
             lambda is_checked: self.on_child_check(index, is_checked)
         )
@@ -117,6 +128,18 @@ class NestedListItem(QtWidgets.QWidget):
     def set_checked(self, is_checked: bool) -> None:
         if is_checked != self.is_checked():
             self._set_checked(is_checked, is_emit=True)
+
+    # override
+    def setEnabled(self, is_enabled: bool) -> None:
+        super().setEnabled(is_enabled)
+
+        if self.has_widget():
+            self._widget.setEnabled(self.is_checked())
+        for child in self._children:
+            child.setEnabled(is_enabled)
+
+        if is_enabled and self.is_checked():
+            self.signal_checked.emit(True)
 
     # handlers
     def on_state_changed(self, state: int) -> None:

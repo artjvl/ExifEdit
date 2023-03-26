@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 import datetime
-from typing import List, Dict, Callable, Any, Optional
+from typing import Callable, Any, Optional
 
 from PIL import Image
 
