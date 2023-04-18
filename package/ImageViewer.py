@@ -74,7 +74,7 @@ class ImageViewer(QtWidgets.QWidget):
         tree.setIndentation(0)
         tree.setColumnCount(2)
         tree.setColumnWidth(0, 90)
-        tree.setFixedHeight(160)
+        tree.setFixedHeight(180)
         return tree
 
     def fill_tree(self, file: Optional[ExifFile] = None) -> None:
@@ -87,6 +87,7 @@ class ImageViewer(QtWidgets.QWidget):
             file.date_taken(),
             file.camera_maker(),
             file.camera_model(),
+            file.lens_model(),
             file.fstop(),
             file.exp_time(),
             file.iso(),
@@ -95,9 +96,10 @@ class ImageViewer(QtWidgets.QWidget):
 
         self._exif_tree.clear()
         for field in fields:
-            QtWidgets.QTreeWidgetItem(
+            item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
                 self._exif_tree, [field.description(), field.formatted_value()]
             )
+            item.setToolTip(1, field.formatted_value())
 
     def set_images(self, paths: List[str]) -> None:
         if paths != self._paths:

@@ -1,74 +1,130 @@
 from __future__ import annotations
 import os
+import send2trash
 import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union, BinaryIO, Callable, Tuple
 
 from PIL import Image, ExifTags
+import exif
 
 
 class ExifFile(object):
 
     _path: Optional[str]
     _size: Optional[int]
-    _img: Optional[Image.Image]
-    _exif: Optional[Image.Exif]
+    _img: Optional[exif.Image]
 
     def __init__(self, path: Optional[str] = None) -> None:
+
         self._path = path
         self._size = None
-        self._exif = None
+        self._img = None
 
         if path is not None:
             assert os.path.isfile(path)
 
             self._size = os.path.getsize(path)
-            self._img: Image.Image = Image.open(path)
-            self._exif = self._img.getexif()
 
-    def _get_exif_field(self, tag: str) -> Optional[Any]:
-        if self.has_exif() and tag in self._exif:
-            return self._exif[tag]
-        return None
+            img_bytes: Union[BinaryIO, bytes, str]
+            with open(path, "rb") as img_bytes:
+                self._img = exif.Image(img_bytes)
 
-    def _get_filename(self) -> Optional[str]:
+    def get_dirname(self) -> Optional[str]:
         if self.has_file():
-            return self._path.split("\\")[-1]
+            return os.path.dirname(self._path)
         return None
+
+    def get_filename(self) -> Optional[str]:
+        if self.has_file():
+            return os.path.basename(self._path)
+        return None
+
+    def get_basename(self) -> Optional[str]:
+        if self.has_file():
+            return os.path.splitext(os.path.basename(self._path))[0]
+        return None
+
+    def get_extension(self) -> Optional[str]:
+        if self.has_file():
+            return os.path.splitext(os.path.basename(self._path))[1]
+        return None
+
+    def _get_exif_field(
+        self,
+        tag: str,
+        description: str,
+        func: Optional[Callable[[Any], Tuple[Any, str]]] = None,
+    ) -> ExifField:
+        value: Optional[Any] = None
+        if self.has_exif(tag=tag):
+            value = self._img.get(tag)
+        if value is not None:
+            parsed: Any = value
+            formatted: str = str(value)
+            if func is not None:
+                parsed, formatted = func(value)
+
+            return ExifField(description, parsed, formatted)
+        return ExifField(description, None, None)
+
+    def _check_path(self, path: str) -> str:
+        dirname: str = os.path.dirname(path)
+        filename: str = os.path.basename(path)
+        basename: str = os.path.splitext(filename)[0]
+        extension: str = os.path.splitext(filename)[1]
+        i: int = 1
+        while os.path.isfile(path):
+            path = os.path.join(dirname, f"{basename}-{i}{extension}")
+            i += 1
+        return path
+
+    def _func_exp_time(self, value: int) -> Tuple[int, str]:
+        exp_time_: int = int(round(1 / float(value)))
+        return (exp_time_, f"1/{exp_time_} s")
+
+    def _func_date_taken(self, value: str) -> Tuple[datetime.datetime, str]:
+        dt: datetime.datetime = datetime.datetime.strptime(
+            value,
+            "%Y:%m:%d %H:%M:%S",
+        )
+        return (dt, str(dt))
 
     # public
     def has_file(self) -> bool:
         return self._path is not None
 
-    def has_exif(self) -> bool:
-        return self._exif is not None
+    def has_exif(self, tag: Optional[str] = None) -> bool:
+        has_exif_: bool = self._img is not None and self._img.has_exif
+        if tag is not None:
+            has_exif_ = has_exif_ and hasattr(self._img, tag)
+        return has_exif_
+
+    def save(self, filename: str) -> None:
+        assert self.has_file() and os.path.isfile(self._path)
+
+        # rename old file
+        send2trash.send2trash(self._path)
+
+        # save new file
+        dirname: str = os.path.dirname(filename)
+        if dirname == "":
+            dirname = os.path.dirname(self._path)
+        new_path = os.path.join(dirname, filename)
+        new_path = self._check_path(new_path)
+        if new_path is self._path:
+            print(f"Saving {new_path}")
+        else:
+            print(f"Saving {self._path} -> {new_path}")
+
+        with open(new_path, "wb") as img_bytes:
+            img_bytes.write(self._img.get_file())
 
     def path(self) -> ExifField:
         return ExifField("File path", self._path, self._path)
 
-    def img(self) -> Optional[Image.Image]:
-        return self._img
-
-    def exif(self) -> Optional[Image.Exif]:
-        return self._exif
-
-    def save(self) -> None:
-        assert self.has_file()
-        exif: Optional[Image.Exif] = self._exif
-        print(f"Saving {self._path}")
-        self._img.save(self._path)
-
     def filename(self) -> ExifField:
-        description: str = "File name"
-        if self.has_file():
-            filename_: str = self._get_filename()
-            return ExifField("File name", filename_, filename_)
-        return ExifField(description, None, None)
-
-    def set_filename(self, filename_: str) -> None:
-        if self.has_file():
-            path: str = self._path
-            new_path: str = path.replace(self._get_filename(), filename_)
-            self._path = new_path
+        filename_: Optional[str] = self.get_filename()
+        return ExifField("File path", filename_, filename_)
 
     def filesize_kb(self) -> ExifField:
         description: str = "File Size"
@@ -86,78 +142,39 @@ class ExifFile(object):
 
     def set_date_taken(self, dt: datetime.datetime) -> None:
         date_taken_string: str = dt.strftime("%Y:%m:%d %H:%M:%S")
-        self._exif[ExifTags.Base.DateTime.value] = date_taken_string
-        self._exif[ExifTags.Base.DateTimeOriginal.value] = date_taken_string
-        self._exif[ExifTags.Base.DateTimeDigitized.value] = date_taken_string
+        self._img.datetime = date_taken_string
+        self._img.datetime_digitized = date_taken_string
+        self._img.datetime_original = date_taken_string
 
     def date_taken(self) -> ExifField:
-        description: str = "Date taken"
-        value: Optional[Any] = self._get_exif_field(
-            ExifTags.Base.DateTime.value
-        )  # 0x9003
-        if value is not None:
-            dt: datetime.datetime = datetime.datetime.strptime(
-                str(value),
-                "%Y:%m:%d %H:%M:%S",
-            )
-            return ExifField(description, dt, f"{dt}")
-        return ExifField(description, None, None)
+        return self._get_exif_field("datetime", "Date taken", self._func_date_taken)
 
     def camera_maker(self) -> ExifField:
-        description: str = "Camera maker"
-        value: Optional[Any] = self._get_exif_field(ExifTags.Base.Make.value)  # 0x010F
-        if value is not None:
-            camera_maker_: str = str(value)
-            return ExifField(description, camera_maker_, camera_maker_)
-        return ExifField(description, None, None)
+        return self._get_exif_field("make", "Camera maker")
 
     def camera_model(self) -> ExifField:
-        description: str = "Camera model"
-        value: Optional[Any] = self._get_exif_field(ExifTags.Base.Model.value)  # 0x0110
-        if value is not None:
-            camera_model_: str = str(value)
-            return ExifField(description, camera_model_, camera_model_)
-        return ExifField(description, None, None)
+        return self._get_exif_field("model", "Camera model")
+
+    def lens_model(self) -> ExifField:
+        return self._get_exif_field("lens_model", "Lens model")
 
     def fstop(self) -> ExifField:
-        description: str = "F-stop"
-        value: Optional[Any] = self._get_exif_field(
-            ExifTags.Base.FNumber.value
-        )  # 0x829D
-        if value is not None:
-            fstop_: float = float(value)
-            return ExifField(description, fstop_, f"f/{fstop_}")
-        return ExifField(description, None, None)
+        return self._get_exif_field("f_number", "F-stop", lambda f: (f, f"f/{f}"))
 
     def exp_time(self) -> ExifField:
-        description: str = "Exposure time"
-        value: Optional[Any] = self._get_exif_field(
-            ExifTags.Base.ExposureTime.value
-        )  # 0x829A
-        if value is not None:
-            exp_time_: int = int(round(1 / float(value)))
-            return ExifField(description, exp_time_, f"1/{exp_time_} s")
-        return ExifField(description, None, None)
+        return self._get_exif_field(
+            "exposure_time", "Exposure time", self._func_exp_time
+        )
 
     def iso(self) -> ExifField:
-        description: str = "ISO speed"
-        value: Optional[Any] = self._get_exif_field(
-            ExifTags.Base.ISOSpeedRatings.value
-        )  # 0x8827
-        if value is not None:
-            iso_: int = int(value)
-            return ExifField(description, iso_, f"{iso_}")
-        return ExifField(description, None, None)
+        return self._get_exif_field(
+            "photographic_sensitivity", "ISO speed", lambda i: (i, f"ISO{i}")
+        )
 
     def focal_length(self) -> ExifField:
-        description: str = "Focal length"
-        value: Optional[Any] = self._get_exif_field(
-            ExifTags.Base.FocalLength.value
-        )  # 0x920A
-        if value is not None:
-            focal_length_: float = float(value)
-            return ExifField(description, focal_length_, f"{focal_length_} mm")
-        return ExifField(description, None, None)
+        return self._get_exif_field(
+            "focal_length", "Focal length", lambda f: (f, f"{f} mm")
+        )
 
 
 class ExifField(object):

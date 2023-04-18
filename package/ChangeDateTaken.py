@@ -96,14 +96,14 @@ class ChangeDateTaken(QtWidgets.QWidget):
                 # specific date
                 new_dt: datetime.datetime = self._datetime_relative.date_time(dt)
                 return new_dt
-        elif dt is not None:
-            # original
-            return dt
         return None
 
     # emit
     def emit_date_time(self) -> None:
         dt: Optional[datetime.datetime] = self.convert_date_taken(self._dt)
+        if dt is None and self._dt is not None:
+            # date time is not changed
+            dt = self._dt
         self.signal_changed.emit(dt)
 
     # handlers

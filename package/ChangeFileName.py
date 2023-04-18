@@ -44,7 +44,7 @@ class ChangeFileName(QtWidgets.QWidget):
 
         self._map = ExifMap(change_date_taken)
         self._tags = {
-            "ORG": Tag("Original file name", self._map.filename),
+            "ORG": Tag("Original file name", self._map.basename),
             "YYYY": Tag("Year", self._map.year),
             "MM": Tag("Month", self._map.month),
             "DD": Tag("Day", self._map.day),
@@ -94,6 +94,9 @@ class ChangeFileName(QtWidgets.QWidget):
         self._file = file
         self.emit_filename()
 
+    def has_file(self) -> bool:
+        return self._file is not None and self._file.has_file()
+
     def replace_tags(self, text: str, tags: Dict[str, str]) -> str:
         for tag, new in tags.items():
             assert tag in text
@@ -124,21 +127,22 @@ class ChangeFileName(QtWidgets.QWidget):
             if len(elements) > 0 and any(element is not None for element in elements):
                 new_filename: str = self.replace_tags(text, mapping)
                 if any(char.isalnum() for char in new_filename):
-                    return f"{new_filename}.{self._map.extension(file)}"
+                    return f"{new_filename}{file.get_extension()}"
         return None
 
     def convert_filename(self, file: Optional[ExifFile]) -> Optional[str]:
-        if (file is not None) and file.has_file():
-            if self.is_checked():
-                new_filename: Optional[str] = self.compile_filename(file, self._text)
-                if new_filename is not None:
-                    return new_filename
-            return file.filename().value()
+        if self.is_checked() and self.has_file():
+            new_filename: Optional[str] = self.compile_filename(file, self._text)
+            if new_filename is not None:
+                return new_filename
         return None
 
     # emit
     def emit_filename(self) -> Optional[str]:
-        self.signal_changed.emit(self.convert_filename(self._file))
+        filename: Optional[str] = self.convert_filename(self._file)
+        if filename is None and self.has_file():
+            filename = self._file.get_filename()
+        self.signal_changed.emit(filename)
 
     # handlers
     def on_text_changed(self, text: str, tags: List[str]) -> None:

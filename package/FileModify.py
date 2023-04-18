@@ -1,4 +1,5 @@
 from typing import List, Optional
+import re
 
 from PySide6 import QtWidgets
 
@@ -21,7 +22,7 @@ class FileModify(QtWidgets.QWidget):
         super().__init__(parent)
         self._paths = []
         self._file_edit = file_edit
-        self._file_edit.signal_diff.connect(self.update_button)
+        self._file_edit.signal_checked.connect(self.update_button)
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -47,14 +48,21 @@ class FileModify(QtWidgets.QWidget):
 
     # handlers
     def update_button(self) -> None:
-        is_modify: bool = len(self._paths) > 0 and self._file_edit.is_diff()
+        is_modify: bool = len(self._paths) > 0 and self._file_edit.is_checked()
         self._button_modify.setEnabled(is_modify)
 
     def on_modify(self) -> None:
         print("modify")
         for path in self._paths:
             file: ExifFile = ExifFile(path)
-            filename: str = file.filename().value()
-            self._file_edit.convert_file(file)
-            print(f"{filename} -> {file.filename().value()}")
-            file.save()
+            new_filename: Optional[str] = self._file_edit.convert_file(file)
+            if new_filename is not None:
+                basename: str = file.get_basename()
+                extension: str = file.get_extension()
+                match = re.match(r"(.+)-\d+$", basename)
+                if match:
+                    basename = match.group(1)
+                filename: str = f"{basename}{extension}"
+
+                if new_filename != filename:
+                    file.save(filename=new_filename)

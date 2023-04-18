@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 import datetime
 import re
@@ -23,22 +24,18 @@ class ExifMap(object):
 
     def _date_time(self, file: ExifFile) -> Optional[datetime.datetime]:
         dt: Optional[datetime.datetime] = file.date_taken().value()
-        return self._change_date_taken.convert_date_taken(dt)
+        new_dt: Optional[
+            datetime.datetime
+        ] = self._change_date_taken.convert_date_taken(dt)
+        if new_dt is not None:
+            return new_dt
+        return dt
 
     # public
-    def filename(self, file: ExifFile) -> Optional[str]:
-        return file.filename().value()
-
     def basename(self, file: ExifFile) -> Optional[str]:
-        filename_: Optional[str] = self.filename(file)
+        filename_: Optional[str] = file.get_filename()
         if filename_ is not None:
-            return filename_.split(".")[:-1]
-        return None
-
-    def extension(self, file: ExifFile) -> Optional[str]:
-        filename_: Optional[str] = self.filename(file)
-        if filename_ is not None:
-            return filename_.split(".")[-1]
+            return os.path.splitext(filename_)[0]
         return None
 
     def year(self, file: ExifFile) -> Optional[str]:
@@ -90,7 +87,7 @@ class ExifMap(object):
         return None
 
     def text_upto(self, file: ExifFile, text: str, is_include: bool) -> Optional[str]:
-        filename: Optional[str] = self._filename(file)
+        filename: Optional[str] = self.basename(file)
         if filename is not None:
             pos: int = filename.find(text)
             if is_include:
@@ -99,7 +96,7 @@ class ExifMap(object):
         return None
 
     def text_from(self, file: ExifFile, text: str, is_include: bool) -> Optional[str]:
-        filename: Optional[str] = self._filename(file)
+        filename: Optional[str] = self.basename(file)
         if filename is not None:
             pos: int = filename.find(text)
             if not is_include:

@@ -14,9 +14,9 @@ class FileEdit(QtWidgets.QWidget):
     _file: Optional[ExifFile]
     _dt: Optional[datetime.datetime]
     _filename: Optional[str]
-    _is_diff: bool
+    _is_checked: bool
 
-    signal_diff = QtCore.Signal(bool)
+    signal_checked = QtCore.Signal(bool)
 
     def __init__(
         self, settings: QtCore.QSettings, parent: Optional[QtWidgets.QWidget] = None
@@ -25,7 +25,7 @@ class FileEdit(QtWidgets.QWidget):
         self._file = None
         self._dt = None
         self._filename = None
-        self._is_diff = False
+        self._is_checked = False
 
         layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -47,13 +47,10 @@ class FileEdit(QtWidgets.QWidget):
         self._preview_tree = self.create_preview_tree()
         preview_layout.addWidget(self._preview_tree)
 
-    def is_diff(self) -> bool:
-        is_diff_: bool = False
-        if self._file is not None:
-            is_diff_filename = self._file.filename().value() != self._filename
-            is_diff_dt = self._file.date_taken().value() != self._dt
-            is_diff_ = is_diff_filename or is_diff_dt
-        return is_diff_
+    def is_checked(self) -> bool:
+        return (
+            self._change_filename.is_checked() or self._change_date_taken.is_checked()
+        )
 
     def set_file(self, file: Optional[ExifFile]) -> None:
         self._file = file
@@ -65,18 +62,23 @@ class FileEdit(QtWidgets.QWidget):
         self._change_date_taken.set_date_taken(dt)
         self._change_filename.set_file(file)
 
-    def convert_file(self, file: ExifFile) -> ExifFile:
-        new_filename: str = self._change_filename.convert_filename(file)
-        file.set_filename(new_filename)
+    def convert_file(self, file: ExifFile) -> Optional[str]:
+        new_filename: Optional[str] = self._change_filename.convert_filename(file)
 
         dt: Optional[datetime.datetime] = file.date_taken().value()
         new_dt: Optional[
             datetime.datetime
         ] = self._change_date_taken.convert_date_taken(dt)
-        if dt is not None:
-            file.set_date_taken(new_dt)
 
-        return file
+        if new_dt is None:
+            if new_filename is None:
+                return None
+        else:
+            file.set_date_taken(new_dt)
+            if new_filename is None:
+                new_filename = file.get_filename()
+
+        return new_filename
 
     # preview
     def create_preview_tree(self) -> QtWidgets.QTreeWidget:
@@ -119,19 +121,19 @@ class FileEdit(QtWidgets.QWidget):
         tree_item.setToolTip(1, filename_text)
 
     # emit
-    def emit_diff(self) -> None:
-        is_diff: bool = self.is_diff()
-        if is_diff is not self._is_diff:
-            self._is_diff = is_diff
-            self.signal_diff.emit(is_diff)
+    def emit_checked(self) -> None:
+        is_checked: bool = self.is_checked()
+        if is_checked is not self._is_checked:
+            self._is_checked = is_checked
+            self.signal_checked.emit(is_checked)
 
     # handlers
     def on_date_taken_changed(self, dt: Optional[datetime.datetime]) -> None:
         self._dt = dt
         self.preview_date_taken(dt)
-        self.emit_diff()
+        self.emit_checked()
 
     def on_filename_changed(self, filename: Optional[str]) -> None:
         self._filename = filename
         self.preview_filename(filename)
-        self.emit_diff()
+        self.emit_checked()
