@@ -95,9 +95,11 @@ class ImageViewer(QtWidgets.QWidget):
 
         self._exif_tree.clear()
         for field in fields:
-            QtWidgets.QTreeWidgetItem(self._exif_tree, [field.title(), field.print()])
+            QtWidgets.QTreeWidgetItem(
+                self._exif_tree, [field.description(), field.formatted_value()]
+            )
 
-    def load_images(self, paths: List[str]) -> None:
+    def set_images(self, paths: List[str]) -> None:
         if paths != self._paths:
             self._paths = paths
             self._index = 0

@@ -3,118 +3,106 @@ import datetime
 import re
 
 from package.ExifFile import ExifFile
+from package.ChangeDateTaken import ChangeDateTaken
 
 
 class ExifMap(object):
     _file: Optional[ExifFile]
     _dt: Optional[datetime.datetime]
 
-    def __init__(self) -> None:
+    def __init__(self, change_date_taken: ChangeDateTaken) -> None:
         self._file = None
-        self._dt = None
+        self._change_date_taken = change_date_taken
 
     # private
     def _fix_string(self, text: str, replacement: str = "-") -> str:
         return re.sub(r"[^a-zA-Z0-9_-]", replacement, text)
 
-    def _has_file(self) -> bool:
-        return self._file is not None
-
     def _has_date_time(self) -> bool:
         return self._date_time is not None
 
-    def _date_time(self) -> Optional[datetime.datetime]:
-        if self._has_file():
-            if self._dt is not None:
-                return self._dt
-            dt: Optional[datetime.datetime] = self._file.date_taken().value()
-            if dt is not None:
-                return dt
-        return None
-
-    def _filename(self) -> Optional[str]:
-        if self._has_file():
-            filename: str = self._file.filename().value()
-            return filename.rsplit(".", 1)[0]
-        return None
+    def _date_time(self, file: ExifFile) -> Optional[datetime.datetime]:
+        dt: Optional[datetime.datetime] = file.date_taken().value()
+        return self._change_date_taken.convert_date_taken(dt)
 
     # public
-    def set_file(self, exif_file: Optional[ExifFile]) -> None:
-        self._file = exif_file
+    def filename(self, file: ExifFile) -> Optional[str]:
+        return file.filename().value()
 
-    def set_date_time(self, dt: Optional[datetime.datetime]) -> None:
-        self._dt = dt
+    def basename(self, file: ExifFile) -> Optional[str]:
+        filename_: Optional[str] = self.filename(file)
+        if filename_ is not None:
+            return filename_.split(".")[:-1]
+        return None
 
-    def year(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def extension(self, file: ExifFile) -> Optional[str]:
+        filename_: Optional[str] = self.filename(file)
+        if filename_ is not None:
+            return filename_.split(".")[-1]
+        return None
+
+    def year(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.year:0>4}"
-        return ""
+        return None
 
-    def month(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def month(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.month:0>2}"
-        return ""
+        return None
 
-    def day(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def day(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.day:0>2}"
-        return ""
+        return None
 
-    def hour(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def hour(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.hour:0>2}"
-        return ""
+        return None
 
-    def minute(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def minute(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.minute:0>2}"
-        return ""
+        return None
 
-    def second(self) -> str:
-        dt: Optional[datetime.datetime] = self._date_time()
+    def second(self, file: ExifFile) -> Optional[str]:
+        dt: Optional[datetime.datetime] = self._date_time(file)
         if dt is not None:
             return f"{dt.second:0>2}"
-        return ""
+        return None
 
-    def original(self) -> str:
-        filename: Optional[str] = self._filename()
-        if filename is not None:
-            return filename
-        return ""
+    def camera_maker(self, file: ExifFile) -> Optional[str]:
+        exif_value: Optional[str] = file.camera_maker().value()
+        if exif_value is not None:
+            return self._fix_string(exif_value)
+        return None
 
-    def camera_maker(self) -> str:
-        if self._has_file():
-            exif_value: Optional[str] = self._file.camera_maker().value()
-            if exif_value is not None:
-                return self._fix_string(exif_value)
-        return ""
+    def camera_model(self, file: ExifFile) -> Optional[str]:
+        exif_value: Optional[str] = file.camera_model().value()
+        if exif_value is not None:
+            return self._fix_string(exif_value)
+        return None
 
-    def camera_model(self) -> str:
-        if self._has_file():
-            exif_value: Optional[str] = self._file.camera_model().value()
-            if exif_value is not None:
-                return self._fix_string(exif_value)
-        return ""
-
-    def text_upto(self, text: str, is_include: bool) -> str:
-        filename: Optional[str] = self._filename()
+    def text_upto(self, file: ExifFile, text: str, is_include: bool) -> Optional[str]:
+        filename: Optional[str] = self._filename(file)
         if filename is not None:
             pos: int = filename.find(text)
             if is_include:
                 pos += len(text)
             return filename[:pos]
-        return ""
+        return None
 
-    def text_from(self, text: str, is_include: bool) -> str:
-        filename: Optional[str] = self._filename()
+    def text_from(self, file: ExifFile, text: str, is_include: bool) -> Optional[str]:
+        filename: Optional[str] = self._filename(file)
         if filename is not None:
             pos: int = filename.find(text)
             if not is_include:
                 pos += len(text)
             return filename[pos:]
-        return ""
+        return None

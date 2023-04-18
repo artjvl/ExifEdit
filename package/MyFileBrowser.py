@@ -1,6 +1,4 @@
-from PySide6 import QtWidgets
-from PySide6 import QtCore
-from typing import Optional
+from PySide6 import QtWidgets, QtCore
 
 
 class MyFileBrowser(QtWidgets.QMainWindow):

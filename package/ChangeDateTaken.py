@@ -4,28 +4,36 @@ from typing import Optional
 
 from PySide6 import QtCore, QtWidgets
 
-from package.ExifFile import ExifFile
 from package.NestedList import NestedListItem
 
 
 class ChangeDateTaken(QtWidgets.QWidget):
 
+    _SETTING: str = "timedelta"
+    _settings: QtCore.QSettings
     _nested: NestedListItem
-    _nested_relative: NestedListItem
-    _nested_specific: NestedListItem
-    _nested_name: NestedListItem
     _datetime_relative: RelativeDateTime
     _datetime_specific: SpecificDateTime
     _is_relative: bool
     _is_specific_changed: bool
-    _file: Optional[ExifFile]
+    _dt: Optional[datetime.datetime]
 
     signal_changed = QtCore.Signal(datetime.datetime)
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(
+        self, settings: QtCore.QSettings, parent: Optional[QtWidgets.QWidget] = None
+    ) -> None:
         super().__init__(parent)
+        self._settings = settings
+
+        td_seconds: int = 0
+        if self._settings.contains(self._SETTING):
+            setting: Optional[str] = self._settings.value(self._SETTING)
+            if setting is not None:
+                td_seconds = setting
+
         self._is_specific_changed = False
-        self._file = None
+        self._dt = None
 
         layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -38,22 +46,22 @@ class ChangeDateTaken(QtWidgets.QWidget):
             lambda b: self.emit_date_time() if not b else None
         )
 
-        self._datetime_relative = RelativeDateTime()
-        self._datetime_relative.signal_changed.connect(self.emit_date_time)
-        self._nested_relative = self._nested.add_child(
+        self._datetime_relative = RelativeDateTime(total_seconds=td_seconds)
+        self._datetime_relative.signal_changed.connect(self.on_relative_changed)
+        nested_relative = self._nested.add_child(
             "Relative to Date taken", self._datetime_relative
         )
-        self._nested_relative.signal_checked.connect(
+        nested_relative.signal_checked.connect(
             lambda b: self.on_relative_checked() if b else None
         )
         self._is_relative = True
 
         self._datetime_specific = SpecificDateTime()
         self._datetime_specific.signal_changed.connect(self.on_specific_changed)
-        self._nested_specific = self._nested.add_child(
+        nested_specific = self._nested.add_child(
             "Specific date/time", self._datetime_specific
         )
-        self._nested_specific.signal_checked.connect(
+        nested_specific.signal_checked.connect(
             lambda b: self.on_specific_checked() if b else None
         )
 
@@ -61,22 +69,14 @@ class ChangeDateTaken(QtWidgets.QWidget):
     def is_checked(self) -> bool:
         return self._nested.is_checked()
 
-    def set_file(self, file: Optional[ExifFile]) -> None:
-        self._file = file
-        if not self._is_specific_changed and self.has_exif_date_time():
-            self._datetime_specific.set_date_time(self.exif_date_time(), is_emit=False)
+    def set_date_taken(self, dt: Optional[datetime.datetime]) -> None:
+        self._dt = dt
+        if dt is not None and not self._is_specific_changed:
+            self._datetime_specific.set_date_time(dt, is_emit=False)
         self.emit_date_time()
 
-    def has_file(self) -> bool:
-        return self._file is not None
-
-    def has_exif_date_time(self) -> bool:
-        return self.exif_date_time() is not None
-
-    def exif_date_time(self) -> Optional[datetime.datetime]:
-        if self.has_file():
-            return self._file.date_taken().value()
-        return None
+    def has_date_taken(self) -> bool:
+        return self._dt is not None
 
     def relative(self) -> datetime.timedelta:
         return self._datetime_relative.time_delta()
@@ -84,34 +84,40 @@ class ChangeDateTaken(QtWidgets.QWidget):
     def specific(self) -> datetime.datetime:
         return self._datetime_specific.date_time()
 
+    def convert_date_taken(
+        self, dt: Optional[datetime.datetime]
+    ) -> Optional[datetime.datetime]:
+        if self.is_checked():
+            if not self._is_relative:
+                # relative date
+                new_dt: datetime.datetime = self.specific()
+                return new_dt
+            elif dt is not None:
+                # specific date
+                new_dt: datetime.datetime = self._datetime_relative.date_time(dt)
+                return new_dt
+        elif dt is not None:
+            # original
+            return dt
+        return None
+
+    # emit
+    def emit_date_time(self) -> None:
+        dt: Optional[datetime.datetime] = self.convert_date_taken(self._dt)
+        self.signal_changed.emit(dt)
+
     # handlers
     def on_relative_checked(self) -> None:
         self._is_relative = True
         self.emit_date_time()
 
+    def on_relative_changed(self, td: datetime.timedelta) -> None:
+        self._settings.setValue(self._SETTING, int(td.total_seconds()))
+        self.emit_date_time()
+
     def on_specific_checked(self) -> None:
         self._is_relative = False
         self.emit_date_time()
-
-    def emit_date_time(self) -> None:
-        # relative
-        if self.is_checked():
-            if self.has_file() and not self._is_relative:
-                dt: datetime.datetime = self.specific()
-                print(f"specific: {dt}")
-                self.signal_changed.emit(dt)
-                return
-            if self.has_exif_date_time():
-                dt: datetime.datetime = self._datetime_relative.date_time(
-                    self.exif_date_time()
-                )
-                print(f"time-delta: {dt} ({self.relative()})")
-                self.signal_changed.emit(dt)
-                return
-        if self.has_file():
-            self.signal_changed.emit(self.exif_date_time())
-            return
-        self.signal_changed.emit(None)
 
     def on_specific_changed(self) -> None:
         self._is_specific_changed = True
@@ -122,11 +128,21 @@ class RelativeDateTime(QtWidgets.QWidget):
 
     signal_changed = QtCore.Signal(datetime.timedelta)
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(
+        self, total_seconds: int = 0, parent: Optional[QtWidgets.QWidget] = None
+    ) -> None:
         super().__init__(parent)
+
+        days = total_seconds // (24 * 3600)
+        total_seconds %= 24 * 3600
+        hours = total_seconds // 3600
+        total_seconds %= 3600
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
 
         layout = QtWidgets.QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
 
         # combobox +/-
         self._combobox_pm = QtWidgets.QComboBox()
@@ -139,6 +155,7 @@ class RelativeDateTime(QtWidgets.QWidget):
 
         # spinbox day(s)
         self._spinbox_days = QtWidgets.QSpinBox()
+        self._spinbox_days.setValue(days)
         self._spinbox_days.setMaximumWidth(50)
         self._spinbox_days.valueChanged.connect(
             lambda: self.signal_changed.emit(self.time_delta())
@@ -151,11 +168,11 @@ class RelativeDateTime(QtWidgets.QWidget):
         # timeedit relative
         self._timeedit_relative = QtWidgets.QTimeEdit()
         self._timeedit_relative.setDisplayFormat("hh:mm:ss")
+        self._timeedit_relative.setTime(QtCore.QTime(hours, minutes, seconds))
         self._timeedit_relative.timeChanged.connect(
             lambda: self.signal_changed.emit(self.time_delta())
         )
         layout.addWidget(self._timeedit_relative)
-        self.setLayout(layout)
 
     def date_time(self, dt: datetime.datetime) -> datetime.datetime:
         return dt + self.plus_minus() * self.time_delta()

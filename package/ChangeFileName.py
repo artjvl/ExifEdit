@@ -4,16 +4,19 @@ import re
 import functools
 from typing import Optional, List, Dict, Callable
 
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtWidgets
 
-from package.ExifFile import ExifFile, ExifField
+from package.ExifFile import ExifFile
 from package.ExifMap import ExifMap
 from package.NestedList import NestedListItem
+from package.ChangeDateTaken import ChangeDateTaken
 
 
 class ChangeFileName(QtWidgets.QWidget):
 
+    _SETTING: str = "filename"
     _nested: NestedListItem
+    _settings: QtCore.QSettings
     _file: Optional[ExifFile]
     _text: Optional[str]
 
@@ -22,15 +25,26 @@ class ChangeFileName(QtWidgets.QWidget):
 
     signal_changed = QtCore.Signal(str)
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(
+        self,
+        change_date_taken: ChangeDateTaken,
+        settings: QtCore.QSettings,
+        parent: Optional[QtWidgets.QWidget] = None,
+    ) -> None:
         super().__init__(parent)
+        self._settings = settings
+        self._text = ""
+        if self._settings.contains(self._SETTING):
+            text: Optional[str] = self._settings.value(self._SETTING)
+            if text is not None:
+                self._text = text
 
         self._file = None
-        self._text = None
+        change_date_taken.signal_changed.connect(self.emit_filename)
 
-        self._map = ExifMap()
+        self._map = ExifMap(change_date_taken)
         self._tags = {
-            "ORG": Tag("Original file name", self._map.original),
+            "ORG": Tag("Original file name", self._map.filename),
             "YYYY": Tag("Year", self._map.year),
             "MM": Tag("Month", self._map.month),
             "DD": Tag("Day", self._map.day),
@@ -39,10 +53,20 @@ class ChangeFileName(QtWidgets.QWidget):
             "ss": Tag("Second", self._map.second),
             "MAK": Tag("Camera maker", self._map.camera_maker),
             "MOD": Tag("Camera model", self._map.camera_model),
-            "UPT:": Tag("Up to", lambda s: self._map.text_upto(s, False)),
-            "UPTI:": Tag("Up to and including", lambda s: self._map.text_upto(s, True)),
-            "FRM:": Tag("From", lambda s: self._map.text_from(s, False)),
-            "FRMI:": Tag("From and including", lambda s: self._map.text_from(s, True)),
+            "UPT:": Tag(
+                "Up to", lambda file, text: self._map.text_upto(file, text, False)
+            ),
+            "UPTI:": Tag(
+                "Up to and including",
+                lambda file, text: self._map.text_upto(file, text, True),
+            ),
+            "FRM:": Tag(
+                "From", lambda file, text: self._map.text_from(file, text, False)
+            ),
+            "FRMI:": Tag(
+                "From and including",
+                lambda file, text: self._map.text_from(file, text, True),
+            ),
         }
 
         layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
@@ -53,7 +77,7 @@ class ChangeFileName(QtWidgets.QWidget):
         for tag, element in self._tags.items():
             tags[tag] = element.description()
 
-        widget: FileNameFormat = FileNameFormat(tags)
+        widget: FileNameFormat = FileNameFormat(self._text, tags)
         widget.signal_text_changed.connect(self.on_text_changed)
         layout.addWidget(widget)
 
@@ -68,27 +92,6 @@ class ChangeFileName(QtWidgets.QWidget):
 
     def set_file(self, file: Optional[ExifFile]) -> None:
         self._file = file
-        self._map.set_file(file)
-        self.emit_filename()
-
-    def has_file(self) -> bool:
-        return self._file is not None
-
-    def exif_filename(self) -> Optional[str]:
-        if self.has_file():
-            return self._file.filename().value()
-        return None
-
-    def exif_extension(self) -> Optional[str]:
-        if self.has_file():
-            filename: str = self._file.filename().value()
-            split: List[str] = filename.rsplit(".", 1)
-            assert len(split) > 1
-            return split[1]
-        return None
-
-    def set_date_time(self, dt: Optional[datetime.datetime]) -> None:
-        self._map.set_date_time(dt)
         self.emit_filename()
 
     def replace_tags(self, text: str, tags: Dict[str, str]) -> str:
@@ -98,43 +101,50 @@ class ChangeFileName(QtWidgets.QWidget):
             text = text.replace(full_tag, new)
         return text
 
-    def compile_filename(self) -> Optional[str]:
-        if self.has_file() and self._text is not None:
+    def compile_filename(self, file: ExifFile, text: str) -> Optional[str]:
+        if file.has_file() and len(text) > 0:
             tag_pattern = r"\[([^\[\]]*)\]"
-            tags: List[str] = re.findall(tag_pattern, self._text)
+            tags: List[str] = re.findall(tag_pattern, text)
 
             mapping: Dict[str, str] = {}
             for tag in tags:
                 split: List[str] = tag.rsplit(":", 1)
-
                 element: str
                 if len(split) > 1:
+                    # tags with arguments
                     subtag = f"{split[0]}:"
                     arg: str = split[1]
-                    element = self._tags[subtag].mapping(arg)
+                    element = self._tags[subtag].mapping(file, arg)
                 else:
-                    element = self._tags[tag].mapping()
+                    # tags without arguments
+                    element = self._tags[tag].mapping(file)
                 mapping[tag] = element
-            new_filename: str = self.replace_tags(self._text, mapping)
-            if new_filename is not "":
-                return f"{new_filename}.{self.exif_extension()}"
+
+            elements: List[str] = list(mapping.values())
+            if len(elements) > 0 and any(element is not None for element in elements):
+                new_filename: str = self.replace_tags(text, mapping)
+                if any(char.isalnum() for char in new_filename):
+                    return f"{new_filename}.{self._map.extension(file)}"
         return None
+
+    def convert_filename(self, file: Optional[ExifFile]) -> Optional[str]:
+        if (file is not None) and file.has_file():
+            if self.is_checked():
+                new_filename: Optional[str] = self.compile_filename(file, self._text)
+                if new_filename is not None:
+                    return new_filename
+            return file.filename().value()
+        return None
+
+    # emit
+    def emit_filename(self) -> Optional[str]:
+        self.signal_changed.emit(self.convert_filename(self._file))
 
     # handlers
     def on_text_changed(self, text: str, tags: List[str]) -> None:
         self._text = text
+        self._settings.setValue("filename", text)
         self.emit_filename()
-
-    def emit_filename(self) -> None:
-        if self.has_file():
-            if self.is_checked():
-                filename: Optional[str] = self.compile_filename()
-                if filename is not None:
-                    self.signal_changed.emit(filename)
-                    return
-            self.signal_changed.emit(self.exif_filename())
-            return
-        self.signal_changed.emit(None)
 
 
 class FileNameFormat(QtWidgets.QWidget):
@@ -143,7 +153,10 @@ class FileNameFormat(QtWidgets.QWidget):
     signal_text_changed = QtCore.Signal(str, list)
 
     def __init__(
-        self, tags: Dict[str, str], parent: Optional[QtWidgets.QWidget] = None
+        self,
+        text: str,
+        tags: Dict[str, str],
+        parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._tags = list(tags.keys())
@@ -154,7 +167,7 @@ class FileNameFormat(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         # line-edit
-        self._line_edit: QtWidgets.QLineEdit = QtWidgets.QLineEdit()
+        self._line_edit: QtWidgets.QLineEdit = QtWidgets.QLineEdit(text)
         layout.addWidget(self._line_edit)
         self._line_edit.textChanged.connect(self.on_text_changed)
 

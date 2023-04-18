@@ -1,68 +1,58 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QTreeWidget,
-    QTreeWidgetItem,
-    QAbstractItemView,
-    QCheckBox,
-    QPushButton,
-    QLabel,
-    QLayout,
-    QVBoxLayout,
-    QHBoxLayout,
-)
-from PySide6.QtCore import Qt, Signal, QItemSelection
-from typing import Optional
 import os
-from typing import List
+from typing import List, Optional
+
+from PySide6 import QtWidgets, QtCore
 
 
-class FileList(QWidget):
+class FileList(QtWidgets.QWidget):
     _path_list: List[str]
     _selected_list: List[bool]
-    _file_tree: QTreeWidget
-    _button_select: QPushButton
-    _button_deselect: QPushButton
-    _checkbox_select_all: QCheckBox
-    _selection_info: QLabel
+    _file_tree: QtWidgets.QTreeWidget
+    _button_select: QtWidgets.QPushButton
+    _button_deselect: QtWidgets.QPushButton
+    _checkbox_select_all: QtWidgets.QCheckBox
+    _selection_info: QtWidgets.QLabel
 
-    signal_selection_changed: Signal = Signal()
+    signal_selection_changed: QtCore.Signal = QtCore.Signal()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._path_list = []
         self._selected_list = []
-        self._file_tree = QTreeWidget(parent=self)
+        self._file_tree = QtWidgets.QTreeWidget(parent=self)
         self._file_tree.setAlternatingRowColors(True)
         self._file_tree.setHeaderHidden(True)
         self._file_tree.itemChanged.connect(self.on_check_select)
-        self._file_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self._file_tree.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self._file_tree.selectionModel().selectionChanged.connect(self.on_highlight)
-        self._button_select: QPushButton = QPushButton(
+        self._button_select: QtWidgets.QPushButton = QtWidgets.QPushButton(
             "Select highlighted", parent=self
         )
         self._button_select.setEnabled(False)
         self._button_select.pressed.connect(lambda: self.on_select_highlight(True))
-        self._button_deselect: QPushButton = QPushButton(
+        self._button_deselect: QtWidgets.QPushButton = QtWidgets.QPushButton(
             "Deselect highlighted", parent=self
         )
         self._button_deselect.setEnabled(False)
         self._button_deselect.pressed.connect(lambda: self.on_select_highlight(False))
-        self._checkbox_select_all: QCheckBox = QCheckBox("Select all", parent=self)
+        self._checkbox_select_all: QtWidgets.QCheckBox = QtWidgets.QCheckBox(
+            "Select all", parent=self
+        )
         self._checkbox_select_all.setEnabled(False)
         self._checkbox_select_all.toggled.connect(self.on_select_all)
-        self._selection_info: QLabel = QLabel(parent=self)
+        self._selection_info: QtWidgets.QLabel = QtWidgets.QLabel(parent=self)
 
-        button_layout: QLayout = QHBoxLayout()
+        button_layout: QtWidgets.QLayout = QtWidgets.QHBoxLayout()
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.addWidget(self._button_select)
         button_layout.addWidget(self._button_deselect)
 
-        selection_layout: QLayout = QHBoxLayout()
+        selection_layout: QtWidgets.QLayout = QtWidgets.QHBoxLayout()
         selection_layout.setContentsMargins(0, 0, 0, 0)
         selection_layout.addWidget(self._checkbox_select_all)
-        selection_layout.addWidget(self._selection_info, 0, Qt.AlignRight)
+        selection_layout.addWidget(self._selection_info, 0, QtCore.Qt.AlignRight)
 
-        layout: QLayout = QVBoxLayout()
+        layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addItem(button_layout)
         layout.addWidget(self._file_tree)
@@ -76,14 +66,16 @@ class FileList(QWidget):
         self._file_tree.blockSignals(True)
         try:
             for filename in os.listdir(path):
-                filepath: str = f"{path}/{filename}"
+                filepath: str = f"{path}\\{filename}"
                 if os.path.isfile(filepath) and filename.lower().endswith(
                     (".jpg", ".jpeg")
                 ):
                     self._path_list.append(filepath)
                     self._selected_list.append(False)
-                    item: QTreeWidgetItem = QTreeWidgetItem(self._file_tree, [filename])
-                    item.setCheckState(0, Qt.Unchecked)
+                    item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
+                        self._file_tree, [filename]
+                    )
+                    item.setCheckState(0, QtCore.Qt.Unchecked)
         except PermissionError:
             pass
         self._file_tree.blockSignals(False)
@@ -109,17 +101,17 @@ class FileList(QWidget):
 
         num_selected: int = self.get_num_selected()
         if num_selected == 0:
-            self._checkbox_select_all.setCheckState(Qt.Unchecked)
+            self._checkbox_select_all.setCheckState(QtCore.Qt.Unchecked)
         elif num_selected == self.get_num_items():
-            self._checkbox_select_all.setCheckState(Qt.Checked)
+            self._checkbox_select_all.setCheckState(QtCore.Qt.Checked)
         self._selection_info.setText(
-            f"{self.get_num_selected()}/{self.get_num_items()} selected"
+            f"{self.get_num_selected()}\\{self.get_num_items()} selected"
         )
 
         self.signal_selection_changed.emit()
 
     def on_highlight(
-        self, selected: QItemSelection, deselected: QItemSelection
+        self, selected: QtCore.QItemSelection, deselected: QtCore.QItemSelection
     ) -> None:
         if self.get_num_highlighted() > 0:
             self._button_select.setEnabled(True)
@@ -128,7 +120,7 @@ class FileList(QWidget):
             self._button_select.setEnabled(False)
             self._button_deselect.setEnabled(False)
         # for index in selected.indexes():
-        #     item: QTreeWidgetItem = self._file_tree.itemFromIndex(index)
+        #     item: QtWidgets.QTreeWidgetItem = self._file_tree.itemFromIndex(index)
         #     print(
         #         "SEL: row: %s, col: %s, text: %s"
         #         % (index.row(), index.column(), item.text(0))
@@ -140,14 +132,16 @@ class FileList(QWidget):
         #         % (index.row(), index.column(), item.text(0))
         #     )
 
-    def on_check_select(self, item: QTreeWidgetItem, column: int) -> None:
-        is_selected: bool = item.checkState(column) == Qt.Checked
+    def on_check_select(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
+        is_selected: bool = item.checkState(column) == QtCore.Qt.Checked
         index: int = self._file_tree.indexOfTopLevelItem(item)
         self._selected_list[index] = is_selected
         self.update_info()
 
     def on_select_highlight(self, is_selected: bool) -> None:
-        checkstate: Qt.CheckState = Qt.Checked if is_selected else Qt.Unchecked
+        checkstate: QtCore.Qt.CheckState = (
+            QtCore.Qt.Checked if is_selected else QtCore.Qt.Unchecked
+        )
 
         self._file_tree.blockSignals(True)
         for item in self._file_tree.selectedItems():
@@ -159,12 +153,14 @@ class FileList(QWidget):
         self.update_info()
 
     def on_select_all(self, is_selected: bool) -> None:
-        checkstate: Qt.CheckState = Qt.Checked if is_selected else Qt.Unchecked
+        checkstate: QtCore.Qt.CheckState = (
+            QtCore.Qt.Checked if is_selected else QtCore.Qt.Unchecked
+        )
 
         self._file_tree.blockSignals(True)
         for i, _ in enumerate(self._selected_list):
             self._selected_list[i] = is_selected
-            item: QTreeWidgetItem = self._file_tree.topLevelItem(i)
+            item: QtWidgets.QTreeWidgetItem = self._file_tree.topLevelItem(i)
             item.setCheckState(0, checkstate)
         self._file_tree.blockSignals(False)
 

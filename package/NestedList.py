@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtWidgets, QtCore
 
 
 class NestedListItem(QtWidgets.QWidget):

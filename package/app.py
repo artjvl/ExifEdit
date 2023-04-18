@@ -9,6 +9,6 @@ def run():
     app = QApplication(sys.argv)
     widget = ExifEdit()
     window = MainWindow(widget)
-    window.resize(800, 800)
+    window.resize(920, 920)
     window.show()
     app.exec()

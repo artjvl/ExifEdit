@@ -1,7 +1,8 @@
 from __future__ import annotations
-from PySide6 import QtCore, QtGui, QtWidgets
-from typing import Optional, Type
 import time
+from typing import Optional, Type
+
+from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class SquarePixLabel(QtWidgets.QLabel):
@@ -135,7 +136,7 @@ class ImageLoader(QtCore.QObject):
         t1 = time.time()
         qimg_size: QtCore.QSize = qimg.size()
         print(
-            f"QImageReader -> QPixmap({qimg_size.width()}x{qimg_size.height()}) [{t1 - t0} s]"
+            f"{self._path} ({qimg_size.width()}x{qimg_size.height()}) [{t1 - t0:.6f} s]"
         )
         self.signal_image.emit(pixmap)
 
