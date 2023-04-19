@@ -4,7 +4,6 @@ import send2trash
 import datetime
 from typing import Any, Optional, Union, BinaryIO, Callable, Tuple
 
-from PIL import Image, ExifTags
 import exif
 
 
@@ -111,10 +110,11 @@ class ExifFile(object):
             dirname = os.path.dirname(self._path)
         new_path = os.path.join(dirname, filename)
         new_path = self._check_path(new_path)
-        if new_path is self._path:
-            print(f"Saving {new_path}")
+
+        if new_path == self._path:
+            print(f"Saving '{new_path}'")
         else:
-            print(f"Saving {self._path} -> {new_path}")
+            print(f"Saving '{self._path}' -> '{new_path}'")
 
         with open(new_path, "wb") as img_bytes:
             img_bytes.write(self._img.get_file())

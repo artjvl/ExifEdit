@@ -5,7 +5,8 @@ from PySide6 import QtWidgets, QtCore
 
 
 class FileList(QtWidgets.QWidget):
-    _path_list: List[str]
+    _dirpath: Optional[str]
+    _filepath_list: List[str]
     _selected_list: List[bool]
     _file_tree: QtWidgets.QTreeWidget
     _button_select: QtWidgets.QPushButton
@@ -17,7 +18,8 @@ class FileList(QtWidgets.QWidget):
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
-        self._path_list = []
+        self._dirpath = None
+        self._filepath_list = []
         self._selected_list = []
         self._file_tree = QtWidgets.QTreeWidget(parent=self)
         self._file_tree.setAlternatingRowColors(True)
@@ -63,6 +65,7 @@ class FileList(QtWidgets.QWidget):
         assert os.path.exists(path)
         self.clear()
 
+        self._dirpath = path
         self._file_tree.blockSignals(True)
         try:
             for filename in os.listdir(path):
@@ -70,7 +73,7 @@ class FileList(QtWidgets.QWidget):
                 if os.path.isfile(filepath) and filename.lower().endswith(
                     (".jpg", ".jpeg")
                 ):
-                    self._path_list.append(filepath)
+                    self._filepath_list.append(filepath)
                     self._selected_list.append(False)
                     item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
                         self._file_tree, [filename]
@@ -80,6 +83,9 @@ class FileList(QtWidgets.QWidget):
             pass
         self._file_tree.blockSignals(False)
         self.update_info()
+
+    def reload(self) -> None:
+        self.load_directory(self._dirpath)
 
     def get_num_items(self) -> int:
         return len(self._selected_list)
@@ -91,7 +97,8 @@ class FileList(QtWidgets.QWidget):
         return sum(self._selected_list)
 
     def clear(self) -> None:
-        self._path_list = []
+        self._dirpath = None
+        self._filepath_list = []
         self._selected_list = []
         self._file_tree.clear()
 
@@ -168,5 +175,5 @@ class FileList(QtWidgets.QWidget):
 
     def selected_paths(self) -> List[str]:
         return [
-            path for i, path in enumerate(self._path_list) if self._selected_list[i]
+            path for i, path in enumerate(self._filepath_list) if self._selected_list[i]
         ]

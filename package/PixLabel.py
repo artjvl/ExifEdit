@@ -6,8 +6,11 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class SquarePixLabel(QtWidgets.QLabel):
-    signal_done: QtCore.Signal = QtCore.Signal()
+
     _border: int  # border in px
+    _thread: QtCore.QThread
+    _loader: ImageLoader
+    signal_done: QtCore.Signal = QtCore.Signal()
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
@@ -71,14 +74,16 @@ class SquarePixLabel(QtWidgets.QLabel):
     def load_image(self, path: Optional[str]) -> None:
         self.clear()
         if path is not None:
-            self.thread = QtCore.QThread()
-            self.loader = self.image_loader()(path, self.inner_size(), time.time())
-            self.loader.moveToThread(self.thread)
-            self.thread.started.connect(self.loader.run)
-            self.loader.signal_image.connect(self.set_image)
-            self.loader.signal_image.connect(self.thread.quit)
-            self.loader.signal_image.connect(self.loader.deleteLater)
-            self.thread.start()
+            self._thread: QtCore.QThread = QtCore.QThread()
+            self._loader: ImageLoader = self.image_loader()(
+                path, self.inner_size(), time.time()
+            )
+            self._loader.moveToThread(self._thread)
+            self._thread.started.connect(self._loader.run)
+            self._loader.signal_image.connect(self.set_image)
+            self._loader.signal_image.connect(self._thread.quit)
+            self._loader.signal_image.connect(self._loader.deleteLater)
+            self._thread.start()
 
     def image_loader(self) -> Type[ImageLoader]:
         return ImageLoader
@@ -117,13 +122,19 @@ class ImageLoader(QtCore.QObject):
     _size: QtCore.QSize
     _t0: Optional[float]
 
-    def __init__(self, path: str, size: QtCore.QSize, t0: Optional[float] = None):
-        super().__init__()
+    def __init__(
+        self,
+        path: str,
+        size: QtCore.QSize,
+        t0: Optional[float] = None,
+        parent: Optional[QtCore.QObject] = None,
+    ):
+        super().__init__(parent)
         self._path = path
         self._size = size
         self._t0 = t0
 
-    def run(self):
+    def run(self) -> None:
         t0: Optional[None] = self._t0
         if t0 is None:
             t0 = time.time()

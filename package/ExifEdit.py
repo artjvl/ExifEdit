@@ -54,6 +54,7 @@ class ExifEdit(QtWidgets.QWidget):
 
         # file modify
         self._file_modify: FileModify = FileModify(self._file_edit, parent=self)
+        self._file_modify.signal_done.connect(self.on_modify)
         action_layout.addWidget(self._file_modify)
 
     def on_folder(self, path: str) -> None:
@@ -66,3 +67,7 @@ class ExifEdit(QtWidgets.QWidget):
 
     def on_image(self, file: Optional[ExifFile]) -> None:
         self._file_edit.set_file(file)
+
+    def on_modify(self, is_done: bool) -> None:
+        if is_done:
+            self._file_list.reload()

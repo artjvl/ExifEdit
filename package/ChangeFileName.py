@@ -101,6 +101,8 @@ class ChangeFileName(QtWidgets.QWidget):
         for tag, new in tags.items():
             assert tag in text
             full_tag: str = f"[{tag}]"
+            if new is None:
+                new = ""
             text = text.replace(full_tag, new)
         return text
 
