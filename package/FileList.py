@@ -61,40 +61,66 @@ class FileList(QtWidgets.QWidget):
         layout.addItem(selection_layout)
         self.setLayout(layout)
 
-    def load_directory(self, path: str) -> None:
-        assert os.path.exists(path)
-        self.clear()
+    def load_directory(
+        self,
+        dirpath: str,
+        selected_filepaths: Optional[List[str]] = None,
+        highlighted_filepaths: Optional[List[str]] = None,
+    ) -> None:
+        assert os.path.exists(dirpath)
 
-        self._dirpath = path
+        # clear state
+        self.clear()
+        self._dirpath = dirpath
+
+        # add items to file-tree
         self._file_tree.blockSignals(True)
+
         try:
-            for filename in os.listdir(path):
-                filepath: str = f"{path}\\{filename}"
+            for filename in os.listdir(dirpath):
+                filepath: str = f"{dirpath}\\{filename}"
                 if os.path.isfile(filepath) and filename.lower().endswith(
                     (".jpg", ".jpeg")
                 ):
                     self._filepath_list.append(filepath)
-                    self._selected_list.append(False)
                     item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
                         self._file_tree, [filename]
                     )
-                    item.setCheckState(0, QtCore.Qt.Unchecked)
+
+                    # selection
+                    is_selected: bool = False
+                    if selected_filepaths is not None:
+                        is_selected: bool = filepath in selected_filepaths
+                    self._selected_list.append(is_selected)
+                    checkstate: QtCore.Qt.CheckState = (
+                        QtCore.Qt.Checked if is_selected else QtCore.Qt.Unchecked
+                    )
+                    item.setCheckState(0, checkstate)
+
+                    # highlight
+                    is_highlighted: bool = False
+                    if highlighted_filepaths is not None:
+                        is_highlighted = filepath in highlighted_filepaths
+                    item.setSelected(is_highlighted)
+
         except PermissionError:
             pass
+
         self._file_tree.blockSignals(False)
-        self.update_info()
 
-    def reload(self) -> None:
-        self.load_directory(self._dirpath)
+        # update UI
+        self.update_ui()
 
-    def get_num_items(self) -> int:
-        return len(self._selected_list)
-
-    def get_num_highlighted(self) -> int:
-        return len(self._file_tree.selectedItems())
-
-    def get_num_selected(self) -> int:
-        return sum(self._selected_list)
+    def reload(
+        self,
+        selected_filepaths: Optional[List[str]] = None,
+        highlighted_filepaths: Optional[List[str]] = None,
+    ) -> None:
+        return self.load_directory(
+            self._dirpath,
+            selected_filepaths=selected_filepaths,
+            highlighted_filepaths=highlighted_filepaths,
+        )
 
     def clear(self) -> None:
         self._dirpath = None
@@ -102,7 +128,7 @@ class FileList(QtWidgets.QWidget):
         self._selected_list = []
         self._file_tree.clear()
 
-    def update_info(self) -> None:
+    def update_ui(self) -> None:
         has_items: bool = self.get_num_items() > 0
         self._checkbox_select_all.setEnabled(has_items)
 
@@ -117,6 +143,21 @@ class FileList(QtWidgets.QWidget):
 
         self.signal_selection_changed.emit()
 
+    def selected_paths(self) -> List[str]:
+        return [
+            path for i, path in enumerate(self._filepath_list) if self._selected_list[i]
+        ]
+
+    def get_num_items(self) -> int:
+        return len(self._selected_list)
+
+    def get_num_highlighted(self) -> int:
+        return len(self._file_tree.selectedItems())
+
+    def get_num_selected(self) -> int:
+        return sum(self._selected_list)
+
+    # handlers
     def on_highlight(
         self, selected: QtCore.QItemSelection, deselected: QtCore.QItemSelection
     ) -> None:
@@ -126,24 +167,12 @@ class FileList(QtWidgets.QWidget):
         else:
             self._button_select.setEnabled(False)
             self._button_deselect.setEnabled(False)
-        # for index in selected.indexes():
-        #     item: QtWidgets.QTreeWidgetItem = self._file_tree.itemFromIndex(index)
-        #     print(
-        #         "SEL: row: %s, col: %s, text: %s"
-        #         % (index.row(), index.column(), item.text(0))
-        #     )
-        # for index in deselected.indexes():
-        #     item = self._file_tree.itemFromIndex(index)
-        #     print(
-        #         "DESEL: row: %s, col: %s, text: %s"
-        #         % (index.row(), index.column(), item.text(0))
-        #     )
 
     def on_check_select(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
         is_selected: bool = item.checkState(column) == QtCore.Qt.Checked
         index: int = self._file_tree.indexOfTopLevelItem(item)
         self._selected_list[index] = is_selected
-        self.update_info()
+        self.update_ui()
 
     def on_select_highlight(self, is_selected: bool) -> None:
         checkstate: QtCore.Qt.CheckState = (
@@ -157,7 +186,7 @@ class FileList(QtWidgets.QWidget):
             item.setCheckState(0, checkstate)
         self._file_tree.blockSignals(False)
 
-        self.update_info()
+        self.update_ui()
 
     def on_select_all(self, is_selected: bool) -> None:
         checkstate: QtCore.Qt.CheckState = (
@@ -171,9 +200,4 @@ class FileList(QtWidgets.QWidget):
             item.setCheckState(0, checkstate)
         self._file_tree.blockSignals(False)
 
-        self.update_info()
-
-    def selected_paths(self) -> List[str]:
-        return [
-            path for i, path in enumerate(self._filepath_list) if self._selected_list[i]
-        ]
+        self.update_ui()

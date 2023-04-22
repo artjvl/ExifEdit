@@ -1,9 +1,9 @@
-from typing import Optional, List
+from typing import Optional, List, Any, Callable
 
 from PySide6 import QtCore, QtWidgets
 
 from package.PixLabel import SquarePixLabel
-from package.ExifFile import ExifFile, ExifField
+from package.Image import Image
 
 
 class ImageViewer(QtWidgets.QWidget):
@@ -11,7 +11,7 @@ class ImageViewer(QtWidgets.QWidget):
     _paths: List[str]
     _index: int
 
-    signal_image_changed = QtCore.Signal(ExifFile)
+    signal_image_changed = QtCore.Signal(Image)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent=parent)
@@ -44,8 +44,31 @@ class ImageViewer(QtWidgets.QWidget):
         self.set_buttons(False)
 
         # exif_tree
-        self._exif_tree: QtWidgets.QTreeWidget = self.create_tree()
-        self.fill_tree()
+        self._exif_tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget()
+        self._exif_tree.setHeaderHidden(True)
+        self._exif_tree.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 0%); font-size: 8pt; border-style: none;"
+        )
+        self._exif_tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self._exif_tree.setFocusPolicy(QtCore.Qt.NoFocus)
+        self._exif_tree.setIndentation(0)
+        self._exif_tree.setColumnCount(2)
+        self._exif_tree.setColumnWidth(0, 90)
+        self._exif_tree.setFixedHeight(180)
+        fields: List[str] = [
+            "File path",
+            "File size",
+            "Date taken",
+            "Camera maker",
+            "Camera model",
+            "Lens model",
+            "F-stop",
+            "Exposure time",
+            "ISO speed",
+            "Focal length",
+        ]
+        for field in fields:
+            QtWidgets.QTreeWidgetItem(self._exif_tree, [field, ""])
 
         # layouts
         layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
@@ -63,43 +86,41 @@ class ImageViewer(QtWidgets.QWidget):
         self.setLayout(layout)
         # self.resize(self.sizeHint().width(), self.minimumHeight())
 
-    def create_tree(self) -> QtWidgets.QTreeWidget:
-        tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget()
-        tree.setHeaderHidden(True)
-        tree.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0%); font-size: 8pt; border-style: none;"
-        )
-        tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-        tree.setFocusPolicy(QtCore.Qt.NoFocus)
-        tree.setIndentation(0)
-        tree.setColumnCount(2)
-        tree.setColumnWidth(0, 90)
-        tree.setFixedHeight(180)
-        return tree
+    def _convert_field(
+        self, value: Any, func: Optional[Callable[[Any], str]] = None
+    ) -> str:
+        if value is not None:
+            if func is not None:
+                return func(value)
+            return value
+        return ""
 
-    def fill_tree(self, file: Optional[ExifFile] = None) -> None:
-        if file is None:
-            file = ExifFile()  # empty ExifFile to get the field names
+    def fill_tree(self, img: Optional[Image] = None) -> None:
+        values: Optional[List[str]] = None
+        if img is not None:
+            values: List[str] = [
+                img.filename(),
+                f"{img.filesize_mb():.2f} MB",
+                self._convert_field(img.date_taken(), lambda dt: str(dt)),
+                self._convert_field(img.camera_maker()),
+                self._convert_field(img.camera_model()),
+                self._convert_field(img.lens_model()),
+                self._convert_field(img.fstop(), lambda f: f"f/{f}"),
+                self._convert_field(img.exp_time(), lambda i: f"1/{i} s"),
+                self._convert_field(img.iso(), lambda i: f"ISO{i}"),
+                self._convert_field(img.focal_length(), lambda f: f"{f} mm"),
+            ]
 
-        fields: List[ExifField] = [
-            file.filename(),
-            file.filesize_mb(),
-            file.date_taken(),
-            file.camera_maker(),
-            file.camera_model(),
-            file.lens_model(),
-            file.fstop(),
-            file.exp_time(),
-            file.iso(),
-            file.focal_length(),
-        ]
+            num_fields: int = self._exif_tree.topLevelItemCount()
+            assert len(values) == num_fields
 
-        self._exif_tree.clear()
-        for field in fields:
-            item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
-                self._exif_tree, [field.description(), field.formatted_value()]
-            )
-            item.setToolTip(1, field.formatted_value())
+            for i in range(num_fields):
+                item: QtWidgets.QTreeWidgetItem = self._exif_tree.topLevelItem(i)
+                value: str = ""
+                if values is not None:
+                    value = values[i]
+                    item.setText(1, value)
+                    item.setToolTip(1, value)
 
     def set_images(self, paths: List[str]) -> None:
         if paths != self._paths:
@@ -141,18 +162,12 @@ class ImageViewer(QtWidgets.QWidget):
 
     def load_image(self) -> None:
         path: Optional[str] = self.path()
-        # if path is None:
-        #     self._button_reload.setText("Reload")
-        # else:
-        #     self._button_reload.setText(
-        #         f"Reload ({self._index + 1}/{len(self._paths)})"
-        #     )
 
-        file: Optional[ExifFile] = None
+        img: Optional[Image] = None
         if path is not None:
-            file = ExifFile(path)
-        self.fill_tree(file)
+            img = Image(path)
+        self.fill_tree(img)
 
         self.set_buttons(False)
         self._pixlabel.load_image(path)
-        self.signal_image_changed.emit(file)
+        self.signal_image_changed.emit(img)

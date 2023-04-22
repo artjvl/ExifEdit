@@ -5,11 +5,18 @@ from package.FileList import FileList
 from package.FileTree import FileTree
 from package.ImageViewer import ImageViewer
 from package.FileEdit import FileEdit
-from package.ExifFile import ExifFile
+from package.Image import Image
 from package.FileModify import FileModify
 
 
 class ExifEdit(QtWidgets.QWidget):
+
+    _file_tree: FileTree
+    _file_list: FileList
+    _image_viewer: ImageViewer
+    _file_edit: FileEdit
+    _file_modify: FileModify
+
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         settings: QtCore.QSettings = QtCore.QSettings("ArtvL", "ExifEdit")
@@ -65,9 +72,17 @@ class ExifEdit(QtWidgets.QWidget):
         self._image_viewer.set_images(paths)
         self._file_modify.set_images(paths)
 
-    def on_image(self, file: Optional[ExifFile]) -> None:
+    def on_image(self, file: Optional[Image]) -> None:
         self._file_edit.set_file(file)
 
     def on_modify(self, is_done: bool) -> None:
-        if is_done:
-            self._file_list.reload()
+        if not is_done:
+            self._file_tree.setEnabled(False)
+            self._file_list.setEnabled(False)
+            self._file_edit.setEnabled(False)
+        else:
+            self._file_tree.setEnabled(True)
+            self._file_list.setEnabled(True)
+            self._file_edit.setEnabled(True)
+            filepaths: List[str] = self._file_modify.new_filepaths()
+            self._file_list.reload(selected_filepaths=filepaths)
