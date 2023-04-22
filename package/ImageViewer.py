@@ -8,14 +8,14 @@ from package.Image import Image
 
 class ImageViewer(QtWidgets.QWidget):
 
-    _paths: List[str]
+    _filepaths: List[str]
     _index: int
 
     signal_image_changed = QtCore.Signal(Image)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent=parent)
-        self._paths = []
+        self._filepaths = []
         self._index = 0
 
         # pixlabel
@@ -122,11 +122,16 @@ class ImageViewer(QtWidgets.QWidget):
                     item.setText(1, value)
                     item.setToolTip(1, value)
 
-    def set_images(self, paths: List[str]) -> None:
-        if paths != self._paths:
-            self._paths = paths
+    def set_images(self, filepaths: List[str]) -> None:
+        if filepaths != self._filepaths:
+            self._filepaths = filepaths
             self._index = 0
             self.update_buttons()
+            self.load_image()
+
+    def set_highlight(self, filepath: str) -> None:
+        if filepath in self._filepaths:
+            self._index = self._filepaths.index(filepath)
             self.load_image()
 
     def set_buttons(self, is_enabled: bool):
@@ -138,7 +143,7 @@ class ImageViewer(QtWidgets.QWidget):
         self._button_next.setEnabled(False)
         self._button_prev.setEnabled(False)
         self._button_reload.setEnabled(False)
-        num_images: int = len(self._paths)
+        num_images: int = len(self._filepaths)
         if num_images > 0:
             self._button_reload.setEnabled(True)
             if num_images > 1:
@@ -146,10 +151,10 @@ class ImageViewer(QtWidgets.QWidget):
                 self._button_prev.setEnabled(True)
 
     def path(self) -> Optional[str]:
-        num_paths: int = len(self._paths)
+        num_paths: int = len(self._filepaths)
         if num_paths > 0:
-            self._index: int = self._index % len(self._paths)
-            return self._paths[self._index]
+            self._index: int = self._index % len(self._filepaths)
+            return self._filepaths[self._index]
         return None
 
     def next_image(self) -> None:

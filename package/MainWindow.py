@@ -36,8 +36,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # widgets - image-viewer
         self._image_viewer: ImageViewer = ImageViewer(parent=self)
-        self._file_list.signal_selection_changed.connect(
-            self.on_images
+        self._file_list.signal_highlight_changed.connect(
+            self.on_image_highlight
         )  # dependency: image-viewer
         self._image_viewer.signal_image_changed.connect(
             self.on_image
@@ -51,6 +51,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_modify.signal_done.connect(
             self.on_modify
         )  # dependencies: file-tree, file-list, file-edit
+        self._file_list.signal_selection_changed.connect(
+            self.on_images
+        )  # dependency: image-viewer, file-modify
 
         # layouts
         widget: QtWidgets.QWidget = QtWidgets.QWidget()
@@ -123,6 +126,10 @@ class MainWindow(QtWidgets.QMainWindow):
         paths: List[str] = self._file_list.selected_paths()
         self._image_viewer.set_images(paths)
         self._file_modify.set_images(paths)
+
+    @QtCore.Slot()
+    def on_image_highlight(self, filepath: str) -> None:
+        self._image_viewer.set_highlight(filepath)
 
     @QtCore.Slot()
     def on_image(self, file: Optional[Image]) -> None:

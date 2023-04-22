@@ -8,13 +8,16 @@ from PySide6 import QtCore, QtGui, QtWidgets
 class SquarePixLabel(QtWidgets.QLabel):
 
     _border: int  # border in px
+    _is_busy: bool
     _thread: QtCore.QThread
     _loader: ImageLoader
+
     signal_done: QtCore.Signal = QtCore.Signal()
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
         self._border = 1
+        self._is_busy = False
 
         # style
         self.setStyleSheet(f"border: {self._border}px solid black;")
@@ -73,7 +76,8 @@ class SquarePixLabel(QtWidgets.QLabel):
 
     def load_image(self, path: Optional[str]) -> None:
         self.clear()
-        if path is not None:
+        if path is not None and not self._is_busy:
+            self._is_busy = True
             self._thread: QtCore.QThread = QtCore.QThread()
             self._loader: ImageLoader = self.image_loader()(
                 path, self.inner_size(), time.time()
@@ -89,6 +93,7 @@ class SquarePixLabel(QtWidgets.QLabel):
         return ImageLoader
 
     def set_image(self, pixmap: QtGui.QPixmap) -> None:
+        self._is_busy = False
         self.setPixmap(pixmap)
         self.signal_done.emit()
 

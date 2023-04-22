@@ -15,6 +15,7 @@ class FileList(QtWidgets.QWidget):
     _selection_info: QtWidgets.QLabel
 
     signal_selection_changed: QtCore.Signal = QtCore.Signal()
+    signal_highlight_changed: QtCore.Signal = QtCore.Signal(str)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -77,7 +78,9 @@ class FileList(QtWidgets.QWidget):
         self._file_tree.blockSignals(True)
 
         try:
-            for filename in os.listdir(dirpath):
+            filenames: List[str] = os.listdir(dirpath)
+            filenames.sort()
+            for filename in filenames:
                 filepath: str = f"{dirpath}\\{filename}"
                 if os.path.isfile(filepath) and filename.lower().endswith(
                     (".jpg", ".jpeg")
@@ -164,6 +167,14 @@ class FileList(QtWidgets.QWidget):
         if self.get_num_highlighted() > 0:
             self._button_select.setEnabled(True)
             self._button_deselect.setEnabled(True)
+
+            indexes: List[int] = selected.indexes()
+            if indexes:
+                index: int = selected.indexes()[0]
+                item: QtWidgets.QTreeWidgetItem = self._file_tree.itemFromIndex(index)
+                filename: str = item.text(0)
+                filepath: str = os.path.join(self._dirpath, filename)
+                self.signal_highlight_changed.emit(filepath)
         else:
             self._button_select.setEnabled(False)
             self._button_deselect.setEnabled(False)
