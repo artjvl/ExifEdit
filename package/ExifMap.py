@@ -90,16 +90,18 @@ class ExifMap(object):
         filename: Optional[str] = self.basename(img)
         if filename is not None:
             pos: int = filename.find(text)
-            if is_include:
-                pos += len(text)
-            return filename[:pos]
+            if pos >= 0:
+                if is_include:
+                    pos += len(text)
+                return filename[:pos]
         return None
 
     def text_from(self, img: Image, text: str, is_include: bool) -> Optional[str]:
         filename: Optional[str] = self.basename(img)
         if filename is not None:
             pos: int = filename.find(text)
-            if not is_include:
-                pos += len(text)
-            return filename[pos:]
+            if pos >= 0:
+                if not is_include:
+                    pos += len(text)
+                return filename[pos:]
         return None
