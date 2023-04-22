@@ -33,7 +33,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_tree.signal_path_changed.connect(
             self.on_folder
         )  # dependency: file-list
-        self._file_tree.load_settings()
 
         # widgets - image-viewer
         self._image_viewer: ImageViewer = ImageViewer(parent=self)
@@ -83,8 +82,11 @@ class MainWindow(QtWidgets.QMainWindow):
         action_exit.setShortcut("Ctrl+Q")
         action_exit.triggered.connect(self.exit_app)
         self._file_menu.addAction(action_exit)
+        action_reload: QtGui.QAction = QtGui.QAction("Reload file-tree", self)
+        action_reload.triggered.connect(self._file_tree.load_tree)
+        self._file_menu.addAction(action_reload)
         action_send2trash: QtGui.QAction = QtGui.QAction(
-            "Send original file copies to trash", self
+            "Move original file copies to trash", self
         )
         action_send2trash.setCheckable(True)
         action_send2trash.setChecked(True)

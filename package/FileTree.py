@@ -32,6 +32,11 @@ class FileTree(QtWidgets.QWidget):
         self._tree.itemSelectionChanged.connect(self.on_selection)
 
         # add drives
+        self.load_tree()
+        layout.addWidget(self._tree)
+
+    def load_tree(self) -> None:
+        self._tree.clear()
         for i in range(65, 91):
             drive: str = f"{chr(i)}:"
             if os.path.exists(f"{drive}\\"):
@@ -39,8 +44,7 @@ class FileTree(QtWidgets.QWidget):
                     self._tree, [drive]
                 )
                 self.load_item(item)
-
-        layout.addWidget(self._tree)
+        self.load_settings()
 
     def load_settings(self) -> None:
         if self._settings.contains(self._SETTING):
