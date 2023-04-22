@@ -104,16 +104,33 @@ class Image(object):
     def lens_model(self) -> str:
         return self._exif_field("lens_model")
 
-    def fstop(self) -> float:
+    def resolution(self) -> Optional[str]:
+        resolution_x: Optional[int] = self._exif_field("pixel_x_dimension")
+        resolution_y: Optional[int] = self._exif_field("pixel_y_dimension")
+        orientation: int = self._exif_field("orientation")
+        if (
+            resolution_x is not None
+            and resolution_y is not None
+            and orientation is not None
+        ):
+            mp: int = (resolution_x * resolution_y) / (1e6)
+            res: str = (
+                f"{resolution_x}x{resolution_y}"
+                if orientation == 1
+                else f"{resolution_y}x{resolution_x}"
+            )
+            return f"{res} ({mp:.2f} MP)"
+
+    def fstop(self) -> Optional[float]:
         return self._exif_field("f_number")
 
-    def exp_time(self) -> int:
+    def exp_time(self) -> Optional[int]:
         return self._exif_field("exposure_time", func=lambda f: int(round(1 / f)))
 
-    def iso(self) -> int:
+    def iso(self) -> Optional[int]:
         return self._exif_field("photographic_sensitivity")
 
-    def focal_length(self) -> float:
+    def focal_length(self) -> Optional[float]:
         return self._exif_field("focal_length")
 
     def save(self, filepath: Optional[str] = None, is_send2trash: bool = True) -> str:

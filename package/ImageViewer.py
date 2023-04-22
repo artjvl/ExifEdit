@@ -54,10 +54,11 @@ class ImageViewer(QtWidgets.QWidget):
         self._exif_tree.setIndentation(0)
         self._exif_tree.setColumnCount(2)
         self._exif_tree.setColumnWidth(0, 90)
-        self._exif_tree.setFixedHeight(180)
+        self._exif_tree.setFixedHeight(192)
         fields: List[str] = [
             "File path",
             "File size",
+            "Resolution",
             "Date taken",
             "Camera maker",
             "Camera model",
@@ -101,6 +102,7 @@ class ImageViewer(QtWidgets.QWidget):
             values: List[str] = [
                 img.filename(),
                 f"{img.filesize_mb():.2f} MB",
+                self._convert_field(img.resolution()),
                 self._convert_field(img.date_taken(), lambda dt: str(dt)),
                 self._convert_field(img.camera_maker()),
                 self._convert_field(img.camera_model()),
