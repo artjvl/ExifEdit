@@ -83,7 +83,15 @@ class MainWindow(QtWidgets.QMainWindow):
         action_exit.setShortcut("Ctrl+Q")
         action_exit.triggered.connect(self.exit_app)
         self._file_menu.addAction(action_exit)
+        action_send2trash: QtGui.QAction = QtGui.QAction(
+            "Send original file copies to trash", self
+        )
+        action_send2trash.setCheckable(True)
+        action_send2trash.setChecked(True)
+        action_send2trash.triggered.connect(self._file_modify.enable_send2trash)
+        self._file_menu.addAction(action_send2trash)
 
+        # menu - view
         self._view_menu = self._menu.addMenu("View")
         action_resize: QtGui.QAction = QtGui.QAction("Enable window resizing", self)
         action_resize.setCheckable(True)

@@ -11,6 +11,8 @@ from package.FileEdit import FileEdit
 
 class FileModify(QtWidgets.QWidget):
 
+    _is_send2trash: bool
+
     _filepaths: List[str]
     _new_filepaths: List[str]
     _file_edit: FileEdit
@@ -27,6 +29,8 @@ class FileModify(QtWidgets.QWidget):
         self, file_edit: FileEdit, parent: Optional[QtWidgets.QWidget]
     ) -> None:
         super().__init__(parent)
+        self._is_send2trash = True
+
         self._filepaths = []
         self._new_filepaths = []
         self._file_edit = file_edit
@@ -67,6 +71,10 @@ class FileModify(QtWidgets.QWidget):
             self._progress_bar.reset()
             self._status_label.setText("")
 
+    def enable_send2trash(self, is_send2trash: bool) -> None:
+        self._is_send2trash = is_send2trash
+
+    # getters
     def filepaths(self) -> List[str]:
         return self._filepaths
 
@@ -74,11 +82,13 @@ class FileModify(QtWidgets.QWidget):
         return self._new_filepaths
 
     # handlers
+    @QtCore.Slot()
     def update_button(self, is_enabled: Optional[bool] = None) -> None:
         if is_enabled is None:
             is_enabled: bool = len(self._filepaths) > 0 and self._file_edit.is_checked()
         self._button_modify.setEnabled(is_enabled)
 
+    @QtCore.Slot()
     def on_status(self, status: int) -> None:
         n: Optional[int] = status
         if status >= 0:
@@ -91,9 +101,12 @@ class FileModify(QtWidgets.QWidget):
             n = None
         self.update_progress(n)
 
+    @QtCore.Slot()
     def on_modify(self) -> None:
         self._thread: QtCore.QThread = QtCore.QThread()
-        self._modifier: FileModifier = FileModifier(self._filepaths, self._file_edit)
+        self._modifier: FileModifier = FileModifier(
+            self._filepaths, self._file_edit, is_send2trash=self._is_send2trash
+        )
         self._modifier.moveToThread(self._thread)
         self._thread.started.connect(self._modifier.run)
         self._modifier.signal_status.connect(self.on_status)
@@ -108,6 +121,8 @@ class FileModify(QtWidgets.QWidget):
 
 class FileModifier(QtCore.QObject):
 
+    _is_send2trash: bool
+
     _filepaths: List[str]
     _new_filepaths: List[str]
     _file_edit: FileEdit
@@ -119,9 +134,11 @@ class FileModifier(QtCore.QObject):
         self,
         filepaths: List[str],
         file_edit: FileEdit,
+        is_send2trash: bool = True,
         parent: Optional[QtCore.QObject] = None,
     ) -> None:
         super().__init__(parent)
+        self._is_send2trash = is_send2trash
         self._filepaths = filepaths
         self._new_filepaths = []
         self._file_edit = file_edit
@@ -139,7 +156,7 @@ class FileModifier(QtCore.QObject):
                 new_filename: Optional[str] = self._file_edit.convert_file(img)
                 if new_filename is not None:
                     new_filepath: str = os.path.join(img.dirname(), new_filename)
-                    img.save(filepath=new_filepath)
+                    img.save(filepath=new_filepath, is_send2trash=self._is_send2trash)
                     self._new_filepaths.append(new_filepath)
             else:
                 print(f"Cannot find file '{filepath}'")
