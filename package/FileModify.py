@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
+import time
 from typing import List, Optional
-import re
 
 from PySide6 import QtCore, QtWidgets
 
@@ -13,6 +13,10 @@ class FileModify(QtWidgets.QWidget):
 
     _is_send2trash: bool
 
+    _UPDATE_RATIO: float = 0.3
+    _t_previous: float
+    _t_delta: float
+
     _filepaths: List[str]
     _new_filepaths: List[str]
     _file_edit: FileEdit
@@ -20,8 +24,8 @@ class FileModify(QtWidgets.QWidget):
     _button_modify: QtWidgets.QPushButton
     _progress_bar: QtWidgets.QProgressBar
     _status_label: QtWidgets.QLabel
-    _thread: QtCore.QThread
-    _loader: FileModifier
+    _thread: Optional[QtCore.QThread]
+    _modifier: Optional[FileModifier]
 
     signal_done: QtCore.Signal = QtCore.Signal(bool)
 
@@ -29,20 +33,40 @@ class FileModify(QtWidgets.QWidget):
         self, file_edit: FileEdit, parent: Optional[QtWidgets.QWidget]
     ) -> None:
         super().__init__(parent)
+        self._thread = None
+        self._modifier = None
         self._is_send2trash = True
+        self._t_previous = 0.0
+        self._t_delta = 0.0
 
         self._filepaths = []
         self._new_filepaths = []
         self._file_edit = file_edit
-        self._file_edit.signal_checked.connect(self.update_button)
 
-        layout = QtWidgets.QVBoxLayout()
-        self.setLayout(layout)
+        layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 6, 0, 0)
+        self.setLayout(layout)
 
-        self._button_modify = QtWidgets.QPushButton("Modify files")
+        button_layout: QtWidgets.QLayout = QtWidgets.QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._button_modify: QtWidgets.QPushButton = QtWidgets.QPushButton(
+            "Modify files"
+        )
         self._button_modify.pressed.connect(self.on_modify)
-        layout.addWidget(self._button_modify)
+        self._file_edit.signal_checked.connect(
+            self.update_button
+        )  # dependency: button-modify
+        button_layout.addWidget(self._button_modify)
+
+        self._button_stop: QtWidgets.QPushButton = QtWidgets.QPushButton("Stop")
+        self._button_stop.pressed.connect(self.on_stop)
+        self._button_stop.setEnabled(False)
+        button_layout.addWidget(self._button_stop)
+
+        self._buttons: QtWidgets.QWidget = QtWidgets.QWidget()
+        self._buttons.setLayout(button_layout)
+        layout.addWidget(self._buttons)
 
         self._progress_bar = QtWidgets.QProgressBar()
         layout.addWidget(self._progress_bar)
@@ -61,13 +85,40 @@ class FileModify(QtWidgets.QWidget):
 
     def update_progress(self, n: Optional[int]) -> None:
         if n is not None:
-            # in progress
-            N: int = len(self._filepaths)
-            percent = int(round(100 * n / N))
-            self._progress_bar.setValue(percent)
-            self._status_label.setText(f"{n}/{N} images modified")
+            if n == 0:
+                self._t_previous = time.time()
+                self._button_stop.setEnabled(True)
+            else:
+                # percentage
+                N: int = len(self._filepaths)
+                percent = int(round(100 * n / N))
+
+                # timing
+                t_now: float = time.time()
+                t_previous: float = self._t_previous
+                t_delta: float = t_now - t_previous
+                t_delta_filtered: float = (
+                    self._UPDATE_RATIO * t_delta
+                    + (1 - self._UPDATE_RATIO) * self._t_delta
+                )
+                t_remaining: float = (N - n) * t_delta_filtered
+
+                total_seconds: int = round(t_remaining)
+                hours = total_seconds // 3600
+                total_seconds %= 3600
+                minutes = total_seconds // 60
+                seconds = total_seconds % 60
+
+                self._progress_bar.setValue(percent)
+                self._status_label.setText(
+                    f"{n}/{N} images modified ({hours:02d}:{minutes:02d}:{seconds:02d} remaining)"
+                )
+
+                self._t_previous = t_now
+                self._t_delta = t_delta_filtered
         else:
             # done
+            self._button_stop.setEnabled(False)
             self._progress_bar.reset()
             self._status_label.setText("")
 
@@ -91,10 +142,10 @@ class FileModify(QtWidgets.QWidget):
     @QtCore.Slot()
     def on_status(self, status: int) -> None:
         n: Optional[int] = status
-        if status >= 0:
+        if status == 0:
             self.update_button(False)
             self.signal_done.emit(False)
-        else:
+        elif status < 0:
             self.update_button(True)
             self._new_filepaths = self._modifier.new_filepaths()
             self.signal_done.emit(True)
@@ -116,7 +167,13 @@ class FileModify(QtWidgets.QWidget):
         self._modifier.signal_status.connect(
             lambda status: self._modifier.deleteLater() if status == -1 else None
         )
+        print("Thread started")
         self._thread.start()
+
+    @QtCore.Slot()
+    def on_stop(self) -> None:
+        assert self._modifier is not None
+        self._modifier.stop()
 
 
 class FileModifier(QtCore.QObject):
@@ -139,25 +196,38 @@ class FileModifier(QtCore.QObject):
     ) -> None:
         super().__init__(parent)
         self._is_send2trash = is_send2trash
+        self._file_edit = file_edit
+
         self._filepaths = filepaths
         self._new_filepaths = []
-        self._file_edit = file_edit
+        self._is_running = False
+
+    def stop(self) -> None:
+        assert self._is_running == True
+        self._is_running = False
 
     def new_filepaths(self) -> List[str]:
         return self._new_filepaths
 
     def run(self) -> None:
+        assert self._is_running == False
+        self._is_running = True
         self.signal_status.emit(0)
         for i, filepath in enumerate(self._filepaths):
-            self.signal_status.emit(i)
-
-            if os.path.isfile(filepath):
-                img: Image = Image(filepath)
-                new_filename: Optional[str] = self._file_edit.convert_file(img)
-                if new_filename is not None:
-                    new_filepath: str = os.path.join(img.dirname(), new_filename)
-                    img.save(filepath=new_filepath, is_send2trash=self._is_send2trash)
-                    self._new_filepaths.append(new_filepath)
+            if not self._is_running:
+                break
             else:
-                print(f"Cannot find file '{filepath}'")
+                self.signal_status.emit(i)
+
+                if os.path.isfile(filepath):
+                    img: Image = Image(filepath)
+                    new_filename: Optional[str] = self._file_edit.convert_file(img)
+                    if new_filename is not None:
+                        new_filepath: str = os.path.join(img.dirname(), new_filename)
+                        img.save(
+                            filepath=new_filepath, is_send2trash=self._is_send2trash
+                        )
+                        self._new_filepaths.append(new_filepath)
+                else:
+                    print(f"Cannot find file '{filepath}'")
         self.signal_status.emit(-1)
