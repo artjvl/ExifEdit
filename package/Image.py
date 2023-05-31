@@ -88,7 +88,7 @@ class Image(object):
 
     def date_taken(self) -> Optional[datetime.datetime]:
         return self._exif_field(
-            "datetime",
+            "datetime_original",
             func=lambda s: datetime.datetime.strptime(
                 s,
                 "%Y:%m:%d %H:%M:%S",

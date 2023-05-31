@@ -52,7 +52,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.on_modify
         )  # dependencies: file-tree, file-list, file-edit
         self._file_list.signal_selection_changed.connect(
-            self.on_images
+            self.on_selected
         )  # dependency: image-viewer, file-modify
 
         # layouts
@@ -120,20 +120,24 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot()
     def on_folder(self, path: str) -> None:
         self._file_list.load_directory(path)
+        self._image_viewer.set_dir(self._file_list.paths())
 
     @QtCore.Slot()
-    def on_images(self) -> None:
+    def on_selected(self) -> None:
         paths: List[str] = self._file_list.selected_paths()
-        self._image_viewer.set_images(paths)
+        self._image_viewer.set_highlight(paths[0])
         self._file_modify.set_images(paths)
 
     @QtCore.Slot()
-    def on_image_highlight(self, filepath: str) -> None:
-        self._image_viewer.set_highlight(filepath)
+    def on_image_highlight(self) -> None:
+        filepaths: List[str] = self._file_list.highlighted_paths()
+        first_filepath: str = filepaths[0]
+        self._image_viewer.set_highlight(first_filepath)
 
     @QtCore.Slot()
     def on_image(self, file: Optional[Image]) -> None:
         self._file_edit.set_file(file)
+        self._file_list.select_item_with_text(file.filename())
 
     @QtCore.Slot()
     def on_modify(self, is_done: bool) -> None:

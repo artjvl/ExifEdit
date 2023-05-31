@@ -9,6 +9,7 @@ from package.Image import Image
 class ImageViewer(QtWidgets.QWidget):
 
     _filepaths: List[str]
+    _selected: List[bool]
     _index: int
 
     signal_image_changed = QtCore.Signal(Image)
@@ -124,17 +125,26 @@ class ImageViewer(QtWidgets.QWidget):
                     item.setText(1, value)
                     item.setToolTip(1, value)
 
-    def set_images(self, filepaths: List[str]) -> None:
+    def set_dir(self, filepaths: List[str]) -> None:
         if filepaths != self._filepaths:
             self._filepaths = filepaths
+            self._selected = [False] * len(filepaths)
             self._index = 0
             self.update_buttons()
-            self.load_image()
+            self.load_image(self.path())
+
+    def set_selected(self, selected: List[str]) -> None:
+        for filepath in selected:
+            assert filepath in self._filepaths
+            index: int = self._filepaths.index(filepath)
+            self._selected[index] = True
 
     def set_highlight(self, filepath: str) -> None:
-        if filepath in self._filepaths:
-            self._index = self._filepaths.index(filepath)
-            self.load_image()
+        assert filepath in self._filepaths
+        index = self._filepaths.index(filepath)
+        if index != self._index:
+            self._index = index
+            self.load_image(self.path())
 
     def set_buttons(self, is_enabled: bool):
         self._button_next.setEnabled(is_enabled)
@@ -160,16 +170,26 @@ class ImageViewer(QtWidgets.QWidget):
         return None
 
     def next_image(self) -> None:
+        # num_files = len(self._filepaths)
+        # for i in range(self._index, self._index + len):
+        #     index = i % num_files
+        #     if self._selected[index]:
+        #         self._index = index
+        #         return self.load_image(self.path())
         self._index += 1
-        self.load_image()
+        self.load_image(self.path())
 
     def previous_image(self) -> None:
+        # num_files = len(self._filepaths)
+        # for i in range(self._index, self._index - len, -1):
+        #     index = i % num_files
+        #     if self._selected[index]:
+        #         self._index = index
+        #         return self.load_image(self.path())
         self._index -= 1
-        self.load_image()
+        self.load_image(self.path())
 
-    def load_image(self) -> None:
-        path: Optional[str] = self.path()
-
+    def load_image(self, path: str) -> None:
         img: Optional[Image] = None
         if path is not None:
             img = Image(path)
