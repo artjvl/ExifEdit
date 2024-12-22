@@ -39,6 +39,9 @@ class SquarePixLabel(QtWidgets.QLabel):
     def has_pixmap(self) -> bool:
         return not self.pixmap().isNull()
 
+    def has_image(self) -> bool:
+        return self.has_pixmap()
+
     def inner_size(self) -> QtCore.QSize:
         return QtCore.QSize(self.inner_width(), self.inner_height())
 
@@ -74,25 +77,53 @@ class SquarePixLabel(QtWidgets.QLabel):
     #             )
     #         )
 
-    def load_image(self, path: Optional[str]) -> None:
+    def load_image(self, path: str) -> bool:
+        # Loads an image from the given 'path'. Returns 'True' if the ImageLoader thread is started
+        # successfully (i.e., 'self._is_busy' is false). Otherwise, 'False' is returned. 
+
+        assert path != None    
+        self.clear_image()
+
+        if self._is_busy:
+            # image-loading thread is busy loading an image; new image cannot be loaded
+            return False
+
+        self._is_busy = True
+
+        # create 'QThread' instance 'self._thread'
+        self._thread: QtCore.QThread = QtCore.QThread()
+        
+        # create 'ImageLoader' instance 'self._loader'
+        self._loader: ImageLoader = self.image_loader()(
+            path, self.inner_size(), time.time()
+        )
+
+        # move 'ImageLoader' object to thread for execution and event-handling 
+        self._loader.moveToThread(self._thread)
+
+        # connect handlers
+        self._thread.started.connect(self._loader.run)
+        self._loader.signal_image.connect(self.set_image)
+        self._loader.signal_image.connect(self._thread.quit)
+        self._loader.signal_image.connect(self._loader.deleteLater)
+
+        # start thread
+        self._thread.start()
+
+        # return 'True' because the image-loading was successfully started
+        return True
+
+    def clear_image(self) -> None:
         self.clear()
-        if path is not None and not self._is_busy:
-            self._is_busy = True
-            self._thread: QtCore.QThread = QtCore.QThread()
-            self._loader: ImageLoader = self.image_loader()(
-                path, self.inner_size(), time.time()
-            )
-            self._loader.moveToThread(self._thread)
-            self._thread.started.connect(self._loader.run)
-            self._loader.signal_image.connect(self.set_image)
-            self._loader.signal_image.connect(self._thread.quit)
-            self._loader.signal_image.connect(self._loader.deleteLater)
-            self._thread.start()
 
     def image_loader(self) -> Type[ImageLoader]:
         return ImageLoader
 
     def set_image(self, pixmap: QtGui.QPixmap) -> None:
+        # Handler method that sets the image loaded by the 'ImageLoader' on the separate thread
+        # created by the 'load_image' method. This method is connected to the 'signal_image' signal
+        # emitted by 'ImageLoader' once image-loading is complete.
+
         self._is_busy = False
         self.setPixmap(pixmap)
         self.signal_done.emit()

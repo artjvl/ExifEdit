@@ -1,27 +1,27 @@
-from typing import Optional, List, Any, Callable
+from typing import Optional, List, Tuple, Any, Callable
 
 from PySide6 import QtCore, QtWidgets
 
 from package.PixLabel import SquarePixLabel
-from package.Image import Image
+from package.Image import Image, ImageExif, ImagePiexif
 
 
 class ImageViewer(QtWidgets.QWidget):
 
-    _filepaths: List[str]
-    _selected: List[bool]
-    _index: int
+    _path: Optional[str]
+    _is_buttons_enabled: bool
 
-    signal_image_changed = QtCore.Signal(Image)
+    signal_image_cycle_next = QtCore.Signal(bool)
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent=parent)
-        self._filepaths = []
-        self._index = 0
+
+        self._path = None
+        self._is_buttons_enabled = True
 
         # pixlabel
         self._pixlabel: SquarePixLabel = SquarePixLabel(parent=self)
-        self._pixlabel.signal_done.connect(self.update_buttons)
+        self._pixlabel.signal_done.connect(self.on_pixlabel_done)
 
         # button_next
         self._button_next: QtWidgets.QPushButton = QtWidgets.QPushButton(
@@ -39,16 +39,16 @@ class ImageViewer(QtWidgets.QWidget):
         self._button_reload: QtWidgets.QPushButton = QtWidgets.QPushButton(
             text="Reload", parent=self
         )
-        self._button_reload.pressed.connect(self.load_image)
+        self._button_reload.pressed.connect(lambda: self._pixlabel.load_image(self._path))
 
         # disable buttons
-        self.set_buttons(False)
+        self.enable_buttons(False)
 
         # exif_tree
         self._exif_tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget()
         self._exif_tree.setHeaderHidden(True)
         self._exif_tree.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0%); font-size: 8pt; border-style: none;"
+            "background-color: rgba(0, 0, 0, 0%); font-size: 10pt; border-style: none;"
         )
         self._exif_tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         self._exif_tree.setFocusPolicy(QtCore.Qt.NoFocus)
@@ -88,113 +88,111 @@ class ImageViewer(QtWidgets.QWidget):
         self.setLayout(layout)
         # self.resize(self.sizeHint().width(), self.minimumHeight())
 
-    def _convert_field(
-        self, value: Any, func: Optional[Callable[[Any], str]] = None
-    ) -> str:
-        if value is not None:
-            if func is not None:
-                return func(value)
-            return value
-        return ""
+    def _format_field(self, values: List[Any], format: Optional[str] = None) -> str:
+        # Converts EXIF value to formatted string. Example: with EXIF F-stop = 2.8, the formatted
+        # string is 'f/2.8'. If the EXUF value is 'None', the formatted string is empty.
 
-    def fill_tree(self, img: Optional[Image] = None) -> None:
-        values: Optional[List[str]] = None
-        if img is not None:
-            values: List[str] = [
-                img.filename(),
-                f"{img.filesize_mb():.2f} MB",
-                self._convert_field(img.resolution()),
-                self._convert_field(img.date_taken(), lambda dt: str(dt)),
-                self._convert_field(img.camera_maker()),
-                self._convert_field(img.camera_model()),
-                self._convert_field(img.lens_model()),
-                self._convert_field(img.fstop(), lambda f: f"f/{f}"),
-                self._convert_field(img.exp_time(), lambda i: f"1/{i} s"),
-                self._convert_field(img.iso(), lambda i: f"ISO{i}"),
-                self._convert_field(img.focal_length(), lambda f: f"{f} mm"),
-            ]
+        if all(item is None for item in values):
+            return ""
+        try:
+            # If fmt is provided, use it. Otherwise, just convert the value to a string.
+            return format.format(*values) if format else ' '.join(map(str, values))
+        except (ValueError, TypeError):
+            return ""
 
-            num_fields: int = self._exif_tree.topLevelItemCount()
-            assert len(values) == num_fields
+    def _fill_tree(self, img: Image) -> None:
+        # Fills the EXIF value tree with formatted strings extracted from the image.
 
-            for i in range(num_fields):
-                item: QtWidgets.QTreeWidgetItem = self._exif_tree.topLevelItem(i)
-                value: str = ""
-                if values is not None:
-                    value = values[i]
-                    item.setText(1, value)
-                    item.setToolTip(1, value)
+        # resolution
+        resolution_x: int
+        resolution_y: int
+        [resolution_x, resolution_y] = img.resolution()
 
-    def set_dir(self, filepaths: List[str]) -> None:
-        if filepaths != self._filepaths:
-            self._filepaths = filepaths
-            self._selected = [False] * len(filepaths)
-            self._index = 0
-            self.update_buttons()
-            self.load_image(self.path())
+        # exposure time
+        exp_time_formatted: str = ''
+        exp_time: Optional[float] = img.exp_time()
+        if exp_time is not None:
+            if exp_time < 1:
+                exp_time_formatted = f"1/{int(round(1 / exp_time))} s"
+            else:
+                exp_time_formatted = f"{exp_time:.1f} s"
 
-    def set_selected(self, selected: List[str]) -> None:
-        for filepath in selected:
-            assert filepath in self._filepaths
-            index: int = self._filepaths.index(filepath)
-            self._selected[index] = True
+        # format all values into strings
+        values: List[str] = [
+            self._format_field([img.filename()]),
+            self._format_field([img.filesize_mb(), img.filesize_kb()], '{:.2f} MB ({:.1f} KB)'),
+            self._format_field([resolution_x, resolution_y, (resolution_x * resolution_y) / 1e6], '{}x{} ({:.2f} MP)'),
+            self._format_field([img.date_taken()], '{}'),
+            self._format_field([img.camera_maker()]),
+            self._format_field([img.camera_model()]),
+            self._format_field([img.lens_model()]),
+            self._format_field([img.fstop()], 'f/{}'),
+            self._format_field([exp_time_formatted]),
+            self._format_field([img.iso()], 'ISO{}'),
+            self._format_field([img.focal_length()], '{} mm'),
+        ]
 
-    def set_highlight(self, filepath: str) -> None:
-        assert filepath in self._filepaths
-        index = self._filepaths.index(filepath)
-        if index != self._index:
-            self._index = index
-            self.load_image(self.path())
+        num_fields: int = self._exif_tree.topLevelItemCount()
+        assert len(values) == num_fields
 
-    def set_buttons(self, is_enabled: bool):
+        # fill tree with formatted strings
+        for i in range(num_fields):
+            item: QtWidgets.QTreeWidgetItem = self._exif_tree.topLevelItem(i)
+            value: str = ""
+            if values is not None:
+                value = values[i]
+                item.setText(1, value)
+                item.setToolTip(1, value)
+
+    def _clear_tree(self) -> None:
+        # Clears EXIF value tree.
+        
+        num_fields: int = self._exif_tree.topLevelItemCount()
+        for i in range(num_fields):
+            item: QtWidgets.QTreeWidgetItem = self._exif_tree.topLevelItem(i)
+            item.setText(1, "")
+            item.setToolTip(1, "")
+
+    def enable_buttons(self, is_enabled: bool) -> None:
+        self._is_buttons_enabled = is_enabled
         self._button_next.setEnabled(is_enabled)
         self._button_prev.setEnabled(is_enabled)
-        self._button_reload.setEnabled(is_enabled)
 
-    def update_buttons(self):
-        self._button_next.setEnabled(False)
-        self._button_prev.setEnabled(False)
-        self._button_reload.setEnabled(False)
-        num_images: int = len(self._filepaths)
-        if num_images > 0:
-            self._button_reload.setEnabled(True)
-            if num_images > 1:
-                self._button_next.setEnabled(True)
-                self._button_prev.setEnabled(True)
-
-    def path(self) -> Optional[str]:
-        num_paths: int = len(self._filepaths)
-        if num_paths > 0:
-            self._index: int = self._index % len(self._filepaths)
-            return self._filepaths[self._index]
-        return None
+    def has_image(self) -> bool:
+        return self._pixlabel.has_image()
 
     def next_image(self) -> None:
-        # num_files = len(self._filepaths)
-        # for i in range(self._index, self._index + len):
-        #     index = i % num_files
-        #     if self._selected[index]:
-        #         self._index = index
-        #         return self.load_image(self.path())
-        self._index += 1
-        self.load_image(self.path())
+        self.signal_image_cycle_next.emit(True)
 
     def previous_image(self) -> None:
-        # num_files = len(self._filepaths)
-        # for i in range(self._index, self._index - len, -1):
-        #     index = i % num_files
-        #     if self._selected[index]:
-        #         self._index = index
-        #         return self.load_image(self.path())
-        self._index -= 1
-        self.load_image(self.path())
+        self.signal_image_cycle_next.emit(False)
 
-    def load_image(self, path: str) -> None:
-        img: Optional[Image] = None
-        if path is not None:
-            img = Image(path)
-        self.fill_tree(img)
+    def load_image(self, path: str) -> Image:
+        # Returns the image object with EXIF values extracted for the provided path. The function
+        # fills the EXIF tree and initiating image-loading in the PixLabel.
 
-        self.set_buttons(False)
+        assert path != None
+
+        self._path = path
+        img = ImagePiexif(path)
+        self._fill_tree(img)
+        self._button_next.setEnabled(False)
+        self._button_prev.setEnabled(False)
         self._pixlabel.load_image(path)
-        self.signal_image_changed.emit(img)
+        return img
+
+    def clear(self) -> None:
+        # Clears image.
+
+        self._clear_tree()
+        self._button_reload.setEnabled(False)
+        self.enable_buttons(False)
+        if self._pixlabel.has_image():
+            self._pixlabel.clear_image()
+
+    # handlers
+    QtCore.Slot()
+    def on_pixlabel_done(self):
+        self._button_reload.setEnabled(True)
+        self._button_next.setEnabled(self._is_buttons_enabled)
+        self._button_prev.setEnabled(self._is_buttons_enabled)

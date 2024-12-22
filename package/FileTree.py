@@ -1,5 +1,8 @@
 import os
+import platform
 import time
+import logging
+from pathlib import Path
 from typing import List, Optional
 
 from PySide6 import QtWidgets, QtCore
@@ -37,6 +40,19 @@ class FileTree(QtWidgets.QWidget):
 
     def load_tree(self) -> None:
         self._tree.clear()
+
+        current_os: str = platform.system();
+        logging.warning(current_os)
+        if current_os == "Windows":
+            self.load_root_windows()
+            self.load_settings()
+        elif current_os == "Darwin":
+            self.load_root_macos()
+            # self.load_settings()
+        else:
+            raise NotImplementedError(f"OS '{current_os}' is not supported")
+
+    def load_root_windows(self) -> None:
         for i in range(65, 91):
             drive: str = f"{chr(i)}:"
             if os.path.exists(f"{drive}\\"):
@@ -44,7 +60,13 @@ class FileTree(QtWidgets.QWidget):
                     self._tree, [drive]
                 )
                 self.load_item(item)
-        self.load_settings()
+    
+    def load_root_macos(self) -> None:
+        item: QtWidgets.QTreeWidgetItem = QtWidgets.QTreeWidgetItem(
+            self._tree, ['/']
+        )
+        self.load_item(item)
+        self.load_path(str(Path.home()))
 
     def load_settings(self) -> None:
         if self._settings.contains(self._SETTING):
@@ -53,25 +75,34 @@ class FileTree(QtWidgets.QWidget):
                 self.load_path(path)
 
     def load_path(self, path: str) -> None:
-        assert os.path.exists(path)
-        components: List[str] = path.split("\\")
+        # Loads a path in the file-tree by iteratively expanding path components until the end of
+        # the path has been reached.
 
+        # check if path exists
+        ppath: Path = Path(path)
+        assert ppath.exists()
+
+        # separate path into components and iteratively expand
+        components: tuple[str, ...] = ppath.parts
         current_item: QtWidgets.QTreeWidgetItem = self._tree.invisibleRootItem()
         for component in components:
             child_items = [
                 current_item.child(i) for i in range(current_item.childCount())
             ]
+            
             matching_items = [item for item in child_items if item.text(0) == component]
-
             if not matching_items:
                 return None
             current_item = matching_items[0]
+
+            # expanding the item will cause children to be constructed via the 'on_expand' handler
             current_item.setExpanded(True)
+        
         # current_item.setSelected(True)
 
     @classmethod
     def load_item(cls, item: QtWidgets.QTreeWidgetItem) -> None:
-        path: str = f"{cls.item_path(item)}\\"
+        path: str = f"{cls.item_path(item)}"
         try:
             subfolders: List[str] = next(os.walk(path))[1]
             for subfolder in subfolders:
@@ -89,11 +120,13 @@ class FileTree(QtWidgets.QWidget):
 
     @classmethod
     def item_path(cls, item: QtWidgets.QTreeWidgetItem) -> str:
+        # Returns the path described by a QTreeWidget Item.
+
         text: str = item.text(0)
         parent: Optional[QtWidgets.QTreeWidgetItem] = item.parent()
         if parent is not None:
             super_text: str = cls.item_path(parent)
-            text = f"{super_text}\\{text}"
+            text = os.path.join(super_text, text)
         return text
 
     @classmethod
@@ -109,13 +142,15 @@ class FileTree(QtWidgets.QWidget):
 
     # handlers
     def on_selection(self):
-        item: QtWidgets.QTreeWidgetItem = self._tree.selectedItems()[0]
-        if not item.isExpanded():
-            item.setExpanded(True)
+        selected_items: List[QtWidgets.QTreeWidgetItem] = self._tree.selectedItems()
+        if selected_items:
+            first_item: QtWidgets.QTreeWidgetItem = self._tree.selectedItems()[0]
+            if not first_item.isExpanded():
+                first_item.setExpanded(True)
 
-        path: str = self.item_path(item)
-        self._settings.setValue("path", path)
-        self.signal_path_changed.emit(path)
+            path: str = self.item_path(first_item)
+            self._settings.setValue("path", path)
+            self.signal_path_changed.emit(path)
 
     def on_expand(self, item: QtWidgets.QTreeWidgetItem) -> None:
         t0: int = time.time()
@@ -123,4 +158,4 @@ class FileTree(QtWidgets.QWidget):
         for i in range(item.childCount()):
             child: QtWidgets.QTreeWidgetItem = item.child(i)
             self.load_item(child)
-        print(f"{path} [{time.time() - t0:.6f} s]")
+        logging.info(f"{path} [{time.time() - t0:.6f} s]")

@@ -9,6 +9,7 @@ from package.Image import Image
 from package.ExifMap import ExifMap
 from package.NestedList import NestedListItem
 from package.ChangeDateTaken import ChangeDateTaken
+from package.constants import MIN_TEXTWIDGET_HEIGHT
 
 
 class ChangeFileName(QtWidgets.QWidget):
@@ -173,6 +174,7 @@ class FileNameFormat(QtWidgets.QWidget):
 
         # line-edit
         self._line_edit: QtWidgets.QLineEdit = QtWidgets.QLineEdit(text)
+        self._line_edit.setMinimumHeight(MIN_TEXTWIDGET_HEIGHT)
         layout.addWidget(self._line_edit)
         self._line_edit.textChanged.connect(self.on_text_changed)
 

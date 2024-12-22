@@ -5,6 +5,7 @@ from typing import Optional
 from PySide6 import QtCore, QtWidgets
 
 from package.NestedList import NestedListItem
+from package.constants import MIN_TEXTWIDGET_HEIGHT
 
 
 class ChangeDateTaken(QtWidgets.QWidget):
@@ -147,7 +148,7 @@ class RelativeDateTime(QtWidgets.QWidget):
         # combobox +/-
         self._combobox_pm = QtWidgets.QComboBox()
         self._combobox_pm.addItems(["+", "-"])
-        self._combobox_pm.setMaximumWidth(40)
+        self._combobox_pm.setMaximumWidth(50)
         self._combobox_pm.currentIndexChanged.connect(
             lambda: self.signal_changed.emit(self.time_delta())
         )
@@ -157,16 +158,19 @@ class RelativeDateTime(QtWidgets.QWidget):
         self._spinbox_days = QtWidgets.QSpinBox()
         self._spinbox_days.setValue(days)
         self._spinbox_days.setMaximumWidth(50)
+        self._spinbox_days.setMinimumHeight(MIN_TEXTWIDGET_HEIGHT)
         self._spinbox_days.valueChanged.connect(
             lambda: self.signal_changed.emit(self.time_delta())
         )
         layout.addWidget(self._spinbox_days)
         label_days = QtWidgets.QLabel("day(s)")
         label_days.setMaximumWidth(40)
+        label_days.setMinimumHeight(MIN_TEXTWIDGET_HEIGHT)
         layout.addWidget(label_days)
 
         # timeedit relative
         self._timeedit_relative = QtWidgets.QTimeEdit()
+        self._timeedit_relative.setMinimumHeight(MIN_TEXTWIDGET_HEIGHT)
         self._timeedit_relative.setDisplayFormat("hh:mm:ss")
         self._timeedit_relative.setTime(QtCore.QTime(hours, minutes, seconds))
         self._timeedit_relative.timeChanged.connect(
@@ -211,6 +215,8 @@ class SpecificDateTime(QtWidgets.QWidget):
 
         # dateedit
         self._dateedit = QtWidgets.QDateEdit()
+        self._dateedit.setFixedHeight(MIN_TEXTWIDGET_HEIGHT)
+        # print(f'date-edit height: {self._dateedit.sizeHint().height()}')
         self._dateedit.setDisplayFormat("yyyy/MM/dd")
         self._dateedit.setCalendarPopup(True)
         self._dateedit.dateChanged.connect(self.on_date_time_changed)
@@ -218,6 +224,7 @@ class SpecificDateTime(QtWidgets.QWidget):
 
         # timeedit
         self._timeedit = QtWidgets.QTimeEdit()
+        self._timeedit.setMinimumHeight(MIN_TEXTWIDGET_HEIGHT)
         self._timeedit.setDisplayFormat("hh:mm:ss")
         self._timeedit.timeChanged.connect(self.on_date_time_changed)
         self.set_date_time(datetime.datetime.now(), is_emit=False)

@@ -43,7 +43,7 @@ class FileEdit(QtWidgets.QWidget):
         self._preview_tree: QtWidgets.QTreeWidget = QtWidgets.QTreeWidget()
         self._preview_tree.setHeaderHidden(True)
         self._preview_tree.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0%); font-size: 8pt; border-style: none;"
+            "background-color: rgba(0, 0, 0, 0%); font-size: 10pt; border-style: none;"
         )
         self._preview_tree.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         self._preview_tree.setFocusPolicy(QtCore.Qt.NoFocus)
@@ -66,12 +66,10 @@ class FileEdit(QtWidgets.QWidget):
             self._change_filename.is_checked() or self._change_date_taken.is_checked()
         )
 
-    def set_file(self, file: Optional[Image]) -> None:
+    def set_file(self, file: Image) -> None:
         self._file = file
 
-        dt: Optional[datetime.datetime] = None
-        if file is not None:
-            dt: Optional[datetime.datetime] = file.date_taken()
+        dt: Optional[datetime.datetime] = file.date_taken()
 
         self._change_date_taken.set_date_taken(dt)
         self._change_filename.set_file(file)
@@ -95,7 +93,7 @@ class FileEdit(QtWidgets.QWidget):
         return new_filename
 
     # preview
-    def clear_preview(self) -> None:
+    def clear(self) -> None:
         self.preview_filename(None)
         self.preview_date_taken(None)
 
@@ -118,6 +116,8 @@ class FileEdit(QtWidgets.QWidget):
     # emit
     def emit_checked(self) -> None:
         is_checked: bool = self.is_checked()
+
+        # only send out signal when is_checked changes
         if is_checked is not self._is_checked:
             self._is_checked = is_checked
             self.signal_checked.emit(is_checked)
