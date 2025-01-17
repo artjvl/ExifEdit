@@ -65,18 +65,26 @@ class FileModify(QtWidgets.QWidget):
         self._button_stop.setEnabled(False)
         button_layout.addWidget(self._button_stop)
 
-        self._buttons: QtWidgets.QWidget = QtWidgets.QWidget()
-        self._buttons.setLayout(button_layout)
-        layout.addWidget(self._buttons)
+        buttons: QtWidgets.QWidget = QtWidgets.QWidget()
+        buttons.setLayout(button_layout)
+        layout.addWidget(buttons)
 
         self._progress_bar = QtWidgets.QProgressBar()
         layout.addWidget(self._progress_bar)
         self._progress_bar.setValue(0)
         self._progress_bar.setTextVisible(False)
 
-        self._status_label = QtWidgets.QLabel("")
-        self._status_label.setAlignment(QtCore.Qt.AlignCenter)
-        layout.addWidget(self._status_label)
+        self._items_label = QtWidgets.QLabel("")
+        self._items_label.setAlignment(QtCore.Qt.AlignCenter)
+        self._time_label = QtWidgets.QLabel("")
+        self._time_label.setAlignment(QtCore.Qt.AlignCenter)
+        status_layout: QtWidgets.QLayout = QtWidgets.QHBoxLayout()
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.addWidget(self._items_label, stretch=1)
+        status_layout.addWidget(self._time_label, stretch=1)
+        labels: QtWidgets.QWidget = QtWidgets.QWidget()
+        labels.setLayout(status_layout)
+        layout.addWidget(labels)
 
     def set_images(self, filepaths: List[str]) -> None:
         # Saves image file-paths and enables 'Modify files' button if file modifiers are enabled.
@@ -124,8 +132,11 @@ class FileModify(QtWidgets.QWidget):
             seconds = total_seconds % 60
 
             self._progress_bar.setValue(percent)
-            self._status_label.setText(
-                f"{n}/{N} images modified ({hours:02d}:{minutes:02d}:{seconds:02d} remaining)"
+            self._items_label.setText(
+                f"{n}/{N} images modified"
+            )
+            self._time_label.setText(
+                f"({hours:02d}:{minutes:02d}:{seconds:02d} remaining)"
             )
 
             self._t_previous = t_now
@@ -134,7 +145,8 @@ class FileModify(QtWidgets.QWidget):
     def clear_progress(self) -> None:
         self._button_stop.setEnabled(False)
         self._progress_bar.reset()
-        self._status_label.setText("")
+        self._items_label.setText("")
+        self._time_label.setText("")
 
     def enable_send2trash(self, is_send2trash: bool) -> None:
         self._is_send2trash = is_send2trash
@@ -154,18 +166,20 @@ class FileModify(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def on_modifier_status(self, status: int) -> None:
-        n: int = status
 
         if status == 0:
             # disable modify button
             self._button_modify.setEnabled(False)
             
+            # update progress
+            self.update_progress(0)
+
             # emit signal not done
             self.signal_done.emit(False)
         
         elif status > 0:
-            # update progress bar
-            self.update_progress(n)
+            # update progress
+            self.update_progress(status)
         
         elif status < 0:
             # extract new filepaths
