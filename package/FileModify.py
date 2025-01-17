@@ -18,7 +18,7 @@ class FileModify(QtWidgets.QWidget):
     _t_delta: float
 
     _filepaths: List[str]
-    _new_filepaths: List[str]
+    _modified_filepaths: List[str]
     _file_edit: FileEdit
 
     _button_modify: QtWidgets.QPushButton
@@ -40,7 +40,7 @@ class FileModify(QtWidgets.QWidget):
         self._t_delta = 0.0
 
         self._filepaths = []
-        self._new_filepaths = []
+        self._modified_filepaths = []
         self._file_edit = file_edit
 
         layout: QtWidgets.QLayout = QtWidgets.QVBoxLayout()
@@ -83,6 +83,7 @@ class FileModify(QtWidgets.QWidget):
 
         assert len(filepaths) > 0
         self._filepaths = filepaths
+        self._modified_filepaths = []
         is_checked_fileedit: bool = self._file_edit.is_checked()
         self._button_modify.setEnabled(is_checked_fileedit)
 
@@ -142,8 +143,8 @@ class FileModify(QtWidgets.QWidget):
     def filepaths(self) -> List[str]:
         return self._filepaths
 
-    def new_filepaths(self) -> List[str]:
-        return self._new_filepaths
+    def modified_filepaths(self) -> List[str]:
+        return self._modified_filepaths
 
     # handlers
     @QtCore.Slot()
@@ -154,16 +155,32 @@ class FileModify(QtWidgets.QWidget):
     @QtCore.Slot()
     def on_modifier_status(self, status: int) -> None:
         n: int = status
+
         if status == 0:
+            # disable modify button
             self._button_modify.setEnabled(False)
+            
+            # emit signal not done
             self.signal_done.emit(False)
+        
         elif status > 0:
+            # update progress bar
             self.update_progress(n)
+        
         elif status < 0:
-            self._button_modify.setEnabled(True)
-            self._new_filepaths = self._modifier.new_filepaths()
+            # extract new filepaths
+            self._modified_filepaths = self._modifier.new_filepaths()
+            
+            # clean modifier
             self._modifier = None
+
+            # clear progress bar
             self.clear_progress()
+
+            # enable modify button
+            self._button_modify.setEnabled(True)
+
+            # emit signal done
             self.signal_done.emit(True)
 
     @QtCore.Slot()

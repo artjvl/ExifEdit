@@ -207,7 +207,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self._file_edit.setEnabled(True)
             self._file_list.setEnabled(True)
 
-            filepaths: List[str] = self._file_modify.new_filepaths()
+            # extract highlighted FileList filepaths
+            highlighted_unmodified_filepaths: List[str] = self._file_list.highlighted_paths()
+            highlighted_modified_filepaths: List[str] = highlighted_unmodified_filepaths.copy()
+            
+            # extract FileModify filepaths
+            unmodified_filepaths: List[str] = self._file_modify.filepaths()
+            modified_filepaths: List[str] = self._file_modify.modified_filepaths()
 
-            first_path: str = filepaths[0]
-            self._file_list.reload(selected_filepaths=filepaths, highlighted_filepaths=[first_path])
+            # update highlighted unmodified filepaths with modified filepaths
+            indices = [index for index, value in enumerate(highlighted_unmodified_filepaths) if value in unmodified_filepaths]
+            modified_filepaths_at_indices = [modified_filepaths[index] for index in indices]
+            for index, new_filepath in zip(indices, modified_filepaths_at_indices):
+                highlighted_modified_filepaths[index] = new_filepath
+
+            self._file_list.reload(selected_filepaths=modified_filepaths, highlighted_filepaths=highlighted_modified_filepaths)
