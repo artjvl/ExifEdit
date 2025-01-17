@@ -10,10 +10,14 @@ from PySide6 import QtWidgets, QtCore
 
 class FileTree(QtWidgets.QWidget):
 
+    # contants
     _SETTING: str = "path"
+
+    # Qt objects
     _settings: QtCore.QSettings
     _tree: QtWidgets.QTreeWidget
 
+    # signals
     signal_path_changed = QtCore.Signal(str)
 
     def __init__(
@@ -150,7 +154,10 @@ class FileTree(QtWidgets.QWidget):
 
             path: str = self.item_path(first_item)
             self._settings.setValue("path", path)
-            self.signal_path_changed.emit(path)
+            
+            # emit signal if not blocked
+            if not self._tree.signalsBlocked():
+                self.signal_path_changed.emit(path)
 
     def on_expand(self, item: QtWidgets.QTreeWidgetItem) -> None:
         t0: int = time.time()

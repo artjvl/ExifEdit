@@ -5,10 +5,12 @@ from PySide6 import QtWidgets, QtCore
 
 
 class FileList(QtWidgets.QWidget):
+    
     _dirpath: Optional[str]
     _filepaths: List[str]
     _index_highlight: int
     _selected: List[bool]
+
     _file_tree: QtWidgets.QTreeWidget
     _button_select: QtWidgets.QPushButton
     _button_deselect: QtWidgets.QPushButton
@@ -25,6 +27,8 @@ class FileList(QtWidgets.QWidget):
         self._filepaths = []
         self._index_highlight = 0
         self._selected = []
+        self._is_filetree_signals_blocked = False
+
         self._file_tree = QtWidgets.QTreeWidget(parent=self)
         self._file_tree.setAlternatingRowColors(True)
         self._file_tree.setHeaderHidden(True)
@@ -85,7 +89,7 @@ class FileList(QtWidgets.QWidget):
         num_selected: int = self.num_selected()
         
         # update checkbox 'Select all'
-        self._checkbox_select_all.blockSignals(True)
+        is_checkbox_signals_blocked: bool = self._checkbox_select_all.blockSignals(True)
         self._checkbox_select_all.setEnabled(False)
         self._checkbox_select_all.setCheckState(QtCore.Qt.Unchecked)
         if num_items > 0:
@@ -96,7 +100,8 @@ class FileList(QtWidgets.QWidget):
         # update 'x/n selected' selection counter
         self._selection_info.setText(f'{num_selected}/{num_items} selected')
 
-        self._checkbox_select_all.blockSignals(False)
+        # restore signals
+        self._checkbox_select_all.blockSignals(is_checkbox_signals_blocked)
 
     def load_directory(
         self,
@@ -110,12 +115,16 @@ class FileList(QtWidgets.QWidget):
 
         assert os.path.exists(dirpath), f"'{dirpath}' does not exist!"
 
+        is_items_highlighted: bool = False
+
+        # temporarily block signals
+        is_filetree_signals_blocked: bool = self._file_tree.blockSignals(True)
+
         # clear state
         self.clear()
         self._dirpath = dirpath
 
         # add items to file-tree
-        self._file_tree.blockSignals(True)
         try:
             filenames: List[str] = os.listdir(dirpath)
             filenames.sort()
@@ -145,20 +154,32 @@ class FileList(QtWidgets.QWidget):
                     is_highlighted: bool = False
                     if highlighted_filepaths is not None:
                         is_highlighted = filepath in highlighted_filepaths
+                        if is_highlighted:
+                            is_items_highlighted = True
                     item.setSelected(is_highlighted)
             
-            # update 'Select all' and 'Deselect all' buttons
+            # select first item and update buttons
             if self.num_items() > 0:
-                first_item: QtWidgets.QTreeWidgetItem = self._file_tree.topLevelItem(0)
-                self._file_tree.setCurrentItem(first_item)
+
+                # select first item
+                if not is_items_highlighted:
+                    first_item: QtWidgets.QTreeWidgetItem = self._file_tree.topLevelItem(0)
+                    first_item.setSelected(True)
+                
+                # enable buttons
                 self._button_select.setEnabled(True)
                 self._button_deselect.setEnabled(True)
+            
+            # update user interface
             self.update_ui()
 
         except PermissionError:
             pass
 
-        self._file_tree.blockSignals(False)
+        # restore signals
+        self._file_tree.blockSignals(is_filetree_signals_blocked)
+
+        # emit signal
         self.signal_load_directory.emit(self.num_items())
 
     def reload(
@@ -242,7 +263,7 @@ class FileList(QtWidgets.QWidget):
 
     def num_selected(self) -> int:
         return sum(self._selected)
-
+    
     # handlers
     def on_highlight(
         self, selected: QtCore.QItemSelection, deselected: QtCore.QItemSelection
@@ -250,24 +271,28 @@ class FileList(QtWidgets.QWidget):
         # Updates buttons 'Select highlighted' and 'Deselect highlighted', and emits signal
         # 'signal_highlight_changed' after a highlight change was made.
 
-        # update 'Select highlighted' and 'Deselect highlighted' buttons
-        if self.num_highlighted() > 0:
-            self._button_select.setEnabled(True)
-            self._button_deselect.setEnabled(True)
+        # only update if signals are not blocked, because the selectionChanged signal cannot be blocked
+        if not self._file_tree.signalsBlocked():
+        
+            # update 'Select highlighted' and 'Deselect highlighted' buttons
+            if self.num_highlighted() > 0:
+                self._button_select.setEnabled(True)
+                self._button_deselect.setEnabled(True)
 
-            # find first highlighted item
-            first_item: QtWidgets.QTreeWidgetItem = self._file_tree.selectedItems()[0]
-            first_item_index: int = self._file_tree.indexOfTopLevelItem(first_item)
+                # find first highlighted item
+                first_item: QtWidgets.QTreeWidgetItem = self._file_tree.selectedItems()[0]
+                first_item_index: int = self._file_tree.indexOfTopLevelItem(first_item)
 
-            # if first highlighted item changed
-            if first_item_index != self._index_highlight:
-                self._index_highlight = first_item_index
-                path: str = self.path_from_index(first_item_index)
-                self.signal_highlight_changed.emit(path)
+                # if first highlighted item changed
+                if first_item_index != self._index_highlight:
+                    self._index_highlight = first_item_index
+                    path: str = self.path_from_index(first_item_index)
+                    self.signal_highlight_changed.emit(path)
 
-        else:
-            self._button_select.setEnabled(False)
-            self._button_deselect.setEnabled(False)
+            else:
+                # disable buttons
+                self._button_select.setEnabled(False)
+                self._button_deselect.setEnabled(False)
 
     def on_check_select(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
         # Updates 'self._selected' and UI after an item selection was changed via its checkbox.
@@ -287,14 +312,20 @@ class FileList(QtWidgets.QWidget):
             QtCore.Qt.Checked if is_selected else QtCore.Qt.Unchecked
         )
 
-        self._file_tree.blockSignals(True)
+        # temporarily block signals
+        is_filetree_signals_blocked: bool = self._file_tree.blockSignals(True)
+
+        # update selected items
         for item in self._file_tree.selectedItems():
             index: int = self._file_tree.indexOfTopLevelItem(item)
             self._selected[index] = is_selected
             item.setCheckState(0, checkstate)
-        self._file_tree.blockSignals(False)
+        
+        # restore signals
+        self._file_tree.blockSignals(is_filetree_signals_blocked)
 
-        self.update_ui()
+        # update UI and emit signal
+        self.update_ui()        
         self.signal_selection_changed.emit()
 
     def on_select_all(self, is_selected: bool) -> None:
@@ -305,12 +336,18 @@ class FileList(QtWidgets.QWidget):
             QtCore.Qt.Checked if is_selected else QtCore.Qt.Unchecked
         )
 
-        self._file_tree.blockSignals(True)
+        # temporarily block signals
+        is_filetree_signals_blocked: bool = self._file_tree.blockSignals(True)
+
+        # update selected items
         for i, _ in enumerate(self._selected):
             self._selected[i] = is_selected
             item: QtWidgets.QTreeWidgetItem = self._file_tree.topLevelItem(i)
             item.setCheckState(0, checkstate)
-        self._file_tree.blockSignals(False)
+        
+        # restore signals
+        self._file_tree.blockSignals(is_filetree_signals_blocked)
 
-        self.update_ui()
+        # update UI and emit signal
+        self.update_ui()        
         self.signal_selection_changed.emit()

@@ -168,8 +168,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self._image_viewer.enable_buttons(False)
 
-            # load highlighted (first) image
-            first_path: str = self._file_list.paths()[0]
+            # load first highlighted image
+            first_path: str = self._file_list.highlighted_paths()[0]
             self.on_filelist_highlight_changed(first_path)
             
             selected_paths: List[str] = self._file_list.selected_paths()
@@ -208,4 +208,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self._file_list.setEnabled(True)
 
             filepaths: List[str] = self._file_modify.new_filepaths()
-            self._file_list.reload(selected_filepaths=filepaths)
+
+            first_path: str = filepaths[0]
+            self._file_list.reload(selected_filepaths=filepaths, highlighted_filepaths=[first_path])

@@ -104,8 +104,29 @@ class Image(object):
         return
 
     @abc.abstractmethod
-    def save(self, filepath: Optional[str] = None, is_send2trash: bool = True) -> str:
+    def save(self, filepath: str = None) -> str:
         return
+    
+    def save_with_filename(self, filepath: Optional[str] = None, is_send2trash: bool = True) -> str:
+        if filepath is None:
+            filepath = self._path
+
+        # rename old file
+        assert self._check_path(), "Image file not found"
+        if is_send2trash:
+            send2trash.send2trash(self._path)
+        else:
+            os.remove(self._path)
+
+        # save new file
+        filepath = self._add_suffix(filepath)
+
+        if filepath == self._path:
+            print(f"Saving '{filepath}'")
+        else:
+            print(f"Saving '{self._path}' -> '{filepath}'")
+
+        self.save(filepath)
 
 
 class ExifField(object):
@@ -218,25 +239,7 @@ class ImageExif(Image):
     def focal_length(self) -> Optional[float]:
         return self._exif_field("focal_length")
 
-    def save(self, filepath: Optional[str] = None, is_send2trash: bool = True) -> str:
-        if filepath is None:
-            filepath = self._path
-
-        # rename old file
-        assert self._check_path(), "Image file not found"
-        if is_send2trash:
-            send2trash.send2trash(self._path)
-        else:
-            os.remove(self._path)
-
-        # save new file
-        filepath = self._add_suffix(filepath)
-
-        if filepath == self._path:
-            print(f"Saving '{filepath}'")
-        else:
-            print(f"Saving '{self._path}' -> '{filepath}'")
-
+    def save(self, filepath: str) -> str:
         with open(filepath, "wb") as img_bytes:
             img_bytes.write(self._img.get_file())
 
@@ -245,24 +248,41 @@ class ImageExif(Image):
 
 class ImagePiexif(Image):
 
-    _img: PILImage
-    _exif_data: Dict[str, Any]
+    # see for tags: https://github.com/hMatoba/Piexif/blob/master/piexif/_exif.py
+
+    _path: str
+    _img: Optional[PILImage.Image]
+    _img_data: bytes
+    _exif_dict: Dict[str, Any]
 
     def __init__(self, path: str) -> None:
         super().__init__(path)
 
-        self._img = PILImage.open(path)
-        self._exif_data = piexif.load(path)
+        # save path for later loading in 'resolution' method
+        self._path = path
+
+        # empty image to avoid loading using PIL for each processed image
+        self._img = None
+
+        # read as bytes to leave image untouchen (no recompression)
+        img_bytes: bytes
+        with open(path, 'rb') as img_bytes:
+            self._img_data = img_bytes.read()
+        self._exif_dict = piexif.load(self._img_data)
 
         # bugfix
-        if 41729 in self._exif_data["Exif"]:
-            self._exif_data["Exif"][41729] = b'\x01'
+        if 41729 in self._exif_dict["Exif"]:
+            self._exif_dict["Exif"][41729] = b'\x01'
     
     # public 
     def resolution(self) -> Tuple[int, int]:
+        # only load image using PIL when extracting resolution
+        if self._img is None:
+            self._img = PILImage.open(self._path)
+
         resolution_1: int = self._img.width
         resolution_2: int = self._img.height
-        orientation: int = self._exif_data["0th"].get(piexif.ImageIFD.Orientation, 1)
+        orientation: int = self._exif_dict["0th"].get(piexif.ImageIFD.Orientation, 1)
         
         resolution_x: int = resolution_1
         resolution_y: int = resolution_2
@@ -273,74 +293,57 @@ class ImagePiexif(Image):
 
     def set_date_taken(self, dt: datetime.datetime) -> None:
         date_taken_string: str = dt.strftime("%Y:%m:%d %H:%M:%S")
-        self._exif_data["Exif"][piexif.ExifIFD.DateTimeOriginal] = date_taken_string.encode("utf-8")
-        self._exif_data["Exif"][piexif.ExifIFD.DateTimeDigitized] = date_taken_string.encode("utf-8")
+        self._exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = date_taken_string.encode("utf-8")
+        self._exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = date_taken_string.encode("utf-8")
 
     def date_taken(self) -> Optional[datetime.datetime]:
-        date_taken_str: Optional[str] = self._exif_data["Exif"].get(piexif.ExifIFD.DateTimeOriginal, None)
+        date_taken_str: Optional[str] = self._exif_dict["Exif"].get(piexif.ExifIFD.DateTimeOriginal, None)
         if date_taken_str is not None:
             return datetime.datetime.strptime(date_taken_str.decode(), "%Y:%m:%d %H:%M:%S")
         return None
 
     def camera_maker(self) -> Optional[str]:
-        camera_maker: Optional[str] = self._exif_data["0th"].get(piexif.ImageIFD.Make, None)
+        camera_maker: Optional[str] = self._exif_dict["0th"].get(piexif.ImageIFD.Make, None)
         if camera_maker is not None:
             return camera_maker.decode()
         return None
 
     def camera_model(self) -> Optional[str]:
-        camera_model: Optional[str] = self._exif_data["0th"].get(piexif.ImageIFD.Model, None)
+        camera_model: Optional[str] = self._exif_dict["0th"].get(piexif.ImageIFD.Model, None)
         if camera_model is not None:
             return camera_model.decode()
         return None
 
     def lens_model(self) -> Optional[str]:
-        lens_model: Optional[str] = self._exif_data["Exif"].get(piexif.ExifIFD.LensModel, None)
+        lens_model: Optional[str] = self._exif_dict["Exif"].get(piexif.ExifIFD.LensModel, None)
         if lens_model is not None:
             return lens_model.decode()
         return None
 
     def fstop(self) -> Optional[float]:
-        fstop: Optional[Tuple[int, int]] = self._exif_data["Exif"].get(piexif.ExifIFD.FNumber, None)
+        fstop: Optional[Tuple[int, int]] = self._exif_dict["Exif"].get(piexif.ExifIFD.FNumber, None)
         if fstop is not None:
             return fstop[0] / fstop[1]
         return None
 
     def exp_time(self) -> Optional[float]:
-        exp_time: Optional[Tuple[int, int]] = self._exif_data["Exif"].get(piexif.ExifIFD.ExposureTime, None)
+        exp_time: Optional[Tuple[int, int]] = self._exif_dict["Exif"].get(piexif.ExifIFD.ExposureTime, None)
         if exp_time is not None:
             return exp_time[0] / exp_time[1]
         return None
 
     def iso(self) -> Optional[int]:
-        return self._exif_data["Exif"].get(piexif.ExifIFD.ISOSpeedRatings, None)
+        return self._exif_dict["Exif"].get(piexif.ExifIFD.ISOSpeedRatings, None)
 
     def focal_length(self) -> Optional[float]:
-        focal_length = self._exif_data["Exif"].get(piexif.ExifIFD.FocalLength, None)
+        focal_length = self._exif_dict["Exif"].get(piexif.ExifIFD.FocalLength, None)
         if focal_length is not None:
             return focal_length[0] / focal_length[1]
         return None
 
-    def save(self, filepath: Optional[str] = None, is_send2trash: bool = True) -> str:
-        if filepath is None:
-            filepath = self._path
-
-        # rename old file
-        assert self._check_path(), "Image file not found"
-        if is_send2trash:
-            send2trash.send2trash(self._path)
-        else:
-            os.remove(self._path)
-
-        # save new file
-        filepath = self._add_suffix(filepath)
-
-        if filepath == self._path:
-            print(f"Saving '{filepath}'")
-        else:
-            print(f"Saving '{self._path}' -> '{filepath}'")
-
-        exif_bytes: bytes = piexif.dump(self._exif_data)
-        self._img.save(filepath, "jpeg", exif=exif_bytes)
-
+    def save(self, filepath: str) -> str:
+        exif_bytes: bytes = piexif.dump(self._exif_dict)
+        piexif.insert(exif_bytes, self._img_data, filepath)
+        
         return filepath
+    

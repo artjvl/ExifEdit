@@ -106,37 +106,35 @@ class ChangeFileName(QtWidgets.QWidget):
             text = text.replace(full_tag, new)
         return text
 
-    def compile_filename(self, img: Image, text: str) -> Optional[str]:
-        if len(text) > 0:
-            tag_pattern = r"\[([^\[\]]*)\]"
-            tags: List[str] = re.findall(tag_pattern, text)
+    def compile_filename(self, img: Image, text: str) -> str:
+        assert(len(text) > 0)
+        
+        tag_pattern = r"\[([^\[\]]*)\]"
+        tags: List[str] = re.findall(tag_pattern, text)
 
-            mapping: Dict[str, str] = {}
-            for tag in tags:
-                split: List[str] = tag.rsplit(":", 1)
-                element: str
-                if len(split) > 1:
-                    # tags with arguments
-                    subtag = f"{split[0]}:"
-                    arg: str = split[1]
-                    element = self._tags[subtag].mapping(img, arg)
-                else:
-                    # tags without arguments
-                    element = self._tags[tag].mapping(img)
-                mapping[tag] = element
+        mapping: Dict[str, str] = {}
+        for tag in tags:
+            split: List[str] = tag.rsplit(":", 1)
+            element: str
+            if len(split) > 1:
+                # tags with arguments
+                subtag = f"{split[0]}:"
+                arg: str = split[1]
+                element = self._tags[subtag].mapping(img, arg)
+            else:
+                # tags without arguments
+                element = self._tags[tag].mapping(img)
+            mapping[tag] = element
 
-            elements: List[str] = list(mapping.values())
-            if len(elements) > 0 and any(element is not None for element in elements):
-                new_filename: str = self.replace_tags(text, mapping)
-                if any(char.isalnum() for char in new_filename):
-                    return f"{new_filename}{img.extension()}"
-        return None
+        elements: List[str] = list(mapping.values())
+        if len(elements) > 0 and any(element is not None for element in elements):
+            new_filename: str = self.replace_tags(text, mapping)
+            if any(char.isalnum() for char in new_filename):
+                return f"{new_filename}{img.extension()}"
 
     def convert_filename(self, img: Optional[Image]) -> Optional[str]:
-        if self.is_checked() and self.has_file():
-            new_filename: Optional[str] = self.compile_filename(img, self._text)
-            if new_filename is not None:
-                return new_filename
+        if self.is_checked() and self.has_file() and len(self._text) > 0:
+            return self.compile_filename(img, self._text)
         return None
 
     # emit

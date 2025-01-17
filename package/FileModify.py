@@ -241,7 +241,7 @@ class FileModifier(QtCore.QObject):
                     new_filename: Optional[str] = self._file_edit.convert_file(img)
                     if new_filename is not None:
                         new_filepath: str = os.path.join(img.dirname(), new_filename)
-                        img.save(
+                        img.save_with_filename(
                             filepath=new_filepath, is_send2trash=self._is_send2trash
                         )
                         self._new_filepaths.append(new_filepath)
